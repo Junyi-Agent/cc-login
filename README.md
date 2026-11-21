@@ -98,7 +98,7 @@ Workflow rules (worktrees, the pre-push review gate, ADRs) are in
 | Package | What it does | zsh counterpart |
 |---|---|---|
 | `internal/store` | data directory: names, links, `current`, records, login kind | `_cc_login_dir`, `_cc_login_names`, `_cc_login_default` |
-| `internal/claude` | env for one login, `claude auth status` | `_cc_login_with`, `_cc_login_stored` |
+| `internal/claude` | env for one login, `claude auth status` | `_cc_login_with` |
 | `internal/creds` | access token from `.credentials.json` or the Keychain | `_cc_login_token` |
 | `internal/quota` | `api/oauth/usage` and the quota cache | `_cc_login_quota`, `_cc_login_cached_quota` |
 | `internal/listing` | gather in parallel, format, render, JSON | `_cc_login_state`, `_cc_login_list` |

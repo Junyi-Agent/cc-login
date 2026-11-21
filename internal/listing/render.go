@@ -11,8 +11,6 @@ import (
 	"github.com/Junyi-Agent/cc-login/internal/quota"
 )
 
-func readFile(path string) ([]byte, error) { return os.ReadFile(path) }
-
 // Style is how the table is drawn.
 type Style struct {
 	Color bool   // ANSI colors (a terminal, and NO_COLOR unset)

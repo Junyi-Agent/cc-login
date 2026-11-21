@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"path/filepath"
 	"sync"
 	"time"
@@ -50,7 +51,7 @@ func NewProber(s *store.Store) *Prober {
 	return &Prober{
 		Store:       s,
 		Now:         time.Now(),
-		Env:         claude.Environ(),
+		Env:         os.Environ(),
 		CachePath:   quota.CachePath(),
 		AuthStatus:  claude.AuthStatus,
 		AccessToken: creds.AccessToken,
@@ -158,7 +159,7 @@ func (p *Prober) One(ctx context.Context, name string) Login {
 	// claude reports no expiry for a token: the token login's record keeps it.
 	if l.Token {
 		out = nil
-		if b, err := readFile(p.Store.RecordPath(name)); err == nil {
+		if b, err := os.ReadFile(p.Store.RecordPath(name)); err == nil {
 			out = b
 		}
 	}

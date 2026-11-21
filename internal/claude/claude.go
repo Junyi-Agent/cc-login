@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
@@ -54,24 +53,10 @@ func Env(base []string, dir string) []string {
 	return env
 }
 
-// StoredEnv is base with only the sign-in stored in dir, without any API key
-// or token (_cc_login_stored).
-func StoredEnv(base []string, dir string) []string {
-	return append(without(base, credVars), "CLAUDE_SECURESTORAGE_CONFIG_DIR="+dir)
-}
-
-// Bin is the claude executable.
-func Bin() string {
-	if p, err := exec.LookPath("claude"); err == nil {
-		return p
-	}
-	return "claude"
-}
-
 // AuthStatus runs `claude auth status --json` with env. It returns the output
 // and whether claude exited 0, that is, whether the login is signed in.
 func AuthStatus(ctx context.Context, env []string) ([]byte, bool) {
-	cmd := exec.CommandContext(ctx, Bin(), "auth", "status", "--json")
+	cmd := exec.CommandContext(ctx, "claude", "auth", "status", "--json")
 	cmd.Env = env
 	var out bytes.Buffer
 	cmd.Stdout = &out
@@ -86,6 +71,3 @@ func AuthStatus(ctx context.Context, env []string) ([]byte, bool) {
 
 	return out.Bytes(), err == nil
 }
-
-// Environ is os.Environ, kept as a variable for tests.
-var Environ = os.Environ
