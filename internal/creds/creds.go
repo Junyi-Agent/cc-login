@@ -1,7 +1,16 @@
-// Package creds reads the OAuth access token of a sign-in, which Claude Code
-// keeps in <dir>/.credentials.json, or on macOS in the Keychain item
-// "Claude Code-credentials-<hash>", hash being the first 8 hex digits of the
-// SHA-256 of the directory's path. Claude Code does not document that name.
+// Package creds is what a login's credentials directory holds, and how it
+// reaches claude:
+//
+//   - env.go: the environment of a claude run with one login, and nobody
+//     else's credentials (Env, StoredEnv);
+//   - secret.go: the API key or token file of a key or token login;
+//   - creds.go: the OAuth access token of a sign-in, which Claude Code keeps
+//     in <dir>/.credentials.json, or on macOS in the Keychain item
+//     "Claude Code-credentials-<hash>", hash being the first 8 hex digits of
+//     the SHA-256 of the directory's path. Claude Code does not document
+//     that name.
+//
+// Where the directory is belongs to package state (Store.Dir).
 package creds
 
 import (

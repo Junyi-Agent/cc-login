@@ -25,6 +25,7 @@
 | [0006](0006-cobra-and-bubbletea.md) | 命令行解析用 cobra，交互界面用 bubbletea | 采纳 |
 | [0007](0007-launch-claude-by-exec.md) | claude 由 cc-login 用 exec 启动，不再往 shell 导出凭据 | 采纳 |
 | [0008](0008-state-json-layout.md) | 数据布局：一个 state.json 加按 ID 存放的凭据目录 | 采纳 |
-| [0009](0009-code-structure.md) | 代码结构：app 层、类型、lipgloss 表格、testscript | 采纳 |
+| [0009](0009-code-structure.md) | 代码结构：app 层、类型、lipgloss 表格、testscript | 已取代（见 0012） |
 | [0010](0010-statusline-and-quota-refresh.md) | cc-login 不做状态栏和定时刷新配额 | 采纳 |
 | [0011](0011-simplify.md) | 精简：去掉 migrate、token 叠加、多余的输出格式 | 采纳 |
+| [0012](0012-code-layout.md) | 代码布局：按命令分文件、统一命名、creds 管凭据目录 | 采纳 |

@@ -122,7 +122,7 @@ func TestJSON(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var got []Login
+	var got []loginJSON
 	if err := json.Unmarshal(b.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}

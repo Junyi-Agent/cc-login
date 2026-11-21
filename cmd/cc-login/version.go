@@ -3,7 +3,20 @@ package main
 import (
 	"runtime"
 	"runtime/debug"
+
+	"github.com/spf13/cobra"
 )
+
+func (c *cli) versionCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "version",
+		Short: "Print the version of cc-login",
+		Args:  cobra.NoArgs,
+		RunE: func(*cobra.Command, []string) error {
+			return c.say("cc-login %s (%s)", versionString(), goVersion())
+		},
+	}
+}
 
 // version is set by goreleaser (-X main.version=...); a go install keeps it
 // in the build info instead.

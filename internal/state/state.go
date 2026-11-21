@@ -22,8 +22,8 @@ type Kind string
 // The kinds of login.
 const (
 	SignIn Kind = "sign-in" // claude auth login; Claude Code stores the sign-in
-	Token  Kind = "token"   // a token from claude setup-token, in the oauth-token file
-	APIKey Kind = "api-key" // an Anthropic API key, in the api-key file
+	Token  Kind = "token"   // a token from claude setup-token, in creds.TokenFile
+	APIKey Kind = "api-key" // an Anthropic API key, in creds.APIKeyFile
 )
 
 // Login is one login in state.json. The credentials directory is
@@ -47,13 +47,6 @@ type State struct {
 	Default string            `json:"default,omitempty"` // the ID of the default login; "" for none
 	Logins  map[string]*Login `json:"logins"`            // by ID
 }
-
-// The files in a credentials directory that hold an API key or a token:
-// file names, not secrets.
-const (
-	APIKeyFile = "api-key"     //nolint:gosec // G101: a file name
-	TokenFile  = "oauth-token" //nolint:gosec // G101: a file name
-)
 
 // Version is the state.json format this code writes.
 const Version = 1

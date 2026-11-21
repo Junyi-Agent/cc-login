@@ -2,41 +2,14 @@ package app
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
 	"golang.org/x/sync/errgroup"
 
 	"github.com/Junyi-Agent/cc-login/internal/anthropic"
-	"github.com/Junyi-Agent/cc-login/internal/claude"
 	"github.com/Junyi-Agent/cc-login/internal/state"
 )
-
-// Status is whether a login can be used.
-type Status int
-
-// The statuses, from the best.
-const (
-	SignedIn  Status = iota
-	Expiring         // signed in, and the sign-in or token expires within a week
-	Expired          // the sign-in or token has expired
-	SignedOut        // claude auth status fails
-)
-
-// expiringWithin is how soon an expiry makes a login Expiring.
-const expiringWithin = 7 * 24 * time.Hour
-
-func (s Status) String() string {
-	return [...]string{"signed-in", "expiring", "expired", "signed-out"}[s]
-}
-
-// Usable reports whether claude can use the login: signed in, expiring or not.
-func (s Status) Usable() bool { return s == SignedIn || s == Expiring }
-
-// ErrStaleToken means the sign-in's access token has expired, so the quota
-// cannot be read.
-var ErrStaleToken = errors.New("the access token expired; a claude run with the login refreshes it")
 
 // View is what `list` shows about one login.
 type View struct {
@@ -66,7 +39,8 @@ func (a *App) List(ctx context.Context) ([]View, error) {
 		return nil, nil
 	}
 
-	path, err := a.FindClaude()
+	// Without claude every login would show signed out: say so instead.
+	path, err := a.Claude.Path()
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +51,7 @@ func (a *App) List(ctx context.Context) ([]View, error) {
 	g.SetLimit(a.Parallel)
 	for i, id := range ids {
 		g.Go(func() error {
-			views[i] = a.probe(ctx, path, id, st.Logins[id], id == st.Default)
+			views[i] = a.probe(ctx, id, st.Logins[id], id == st.Default)
 			return nil
 		})
 	}
@@ -87,7 +61,7 @@ func (a *App) List(ctx context.Context) ([]View, error) {
 }
 
 // probe finds the status and the quota of one login.
-func (a *App) probe(ctx context.Context, path, id string, l *state.Login, isDefault bool) (v View) {
+func (a *App) probe(ctx context.Context, id string, l *state.Login, isDefault bool) (v View) {
 	ctx, cancel := context.WithTimeout(ctx, a.Timeout)
 	defer cancel()
 
@@ -106,13 +80,12 @@ func (a *App) probe(ctx context.Context, path, id string, l *state.Login, isDefa
 		v.Plan = "api"
 	}
 
-	dir := a.Store.Dir(id)
-	env, err := claude.Env(a.Env, dir, l.Kind)
+	env, err := a.env(id, l.Kind)
 	if err != nil {
 		return v // the key or token file is gone: claude cannot sign in
 	}
 
-	cs, err := a.AuthStatus(ctx, path, env)
+	cs, err := a.Claude.AuthStatus(ctx, env)
 	if err != nil {
 		a.Log.Debug("claude auth status failed", "login", l.Name, "err", err)
 	}
@@ -136,7 +109,7 @@ func (a *App) probe(ctx context.Context, path, id string, l *state.Login, isDefa
 
 	// Only a sign-in's access token can read the quota.
 	if v.Status.Usable() && l.Kind == state.SignIn {
-		v.Quota, v.QuotaErr = a.quota(ctx, dir)
+		v.Quota, v.QuotaErr = a.quota(ctx, a.Store.Dir(id))
 	}
 
 	return v

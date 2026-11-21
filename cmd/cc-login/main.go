@@ -1,5 +1,10 @@
 // cc-login: several Claude Code logins on one machine, and the default login
 // that claude uses. See README.md.
+//
+// Each command has a file here (its cobra command and what it prints) and a
+// file of the same name in internal/app (what it does). root.go is the
+// command tree, args.go the checks of NAME and --, prompt.go the questions
+// in the terminal (ADR 0012).
 package main
 
 import (
@@ -12,10 +17,8 @@ import (
 	"syscall"
 
 	"github.com/spf13/cobra"
-	"golang.org/x/term"
 
 	"github.com/Junyi-Agent/cc-login/internal/app"
-	"github.com/Junyi-Agent/cc-login/internal/ui"
 )
 
 // cli is one run of cc-login: the app, and where the output goes.
@@ -40,14 +43,15 @@ func main() {
 		args = append([]string{"run", "--"}, args...)
 	}
 
-	code := run(ctx, args, os.Stdout, os.Stderr)
+	code := execute(ctx, args, os.Stdout, os.Stderr)
 	stop()
 	os.Exit(code)
 }
 
-func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+// execute runs the command line args and returns the exit code.
+func execute(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	c := &cli{app: app.New(), out: stdout, err: stderr, exec: syscall.Exec}
-	c.root = c.command()
+	c.root = c.rootCmd()
 
 	// cobra reads os.Args when the args are nil.
 	if args == nil {
@@ -68,33 +72,13 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	return 1
 }
 
-func (c *cli) errf(format string, args ...any) {
-	_, _ = fmt.Fprintf(c.err, "cc-login: "+format+"\n", args...)
+// say prints a line on stdout.
+func (c *cli) say(format string, args ...any) error {
+	_, err := fmt.Fprintf(c.out, format+"\n", args...)
+	return err
 }
 
-// list prints the logins: the table, or JSON for scripts.
-func (c *cli) list(ctx context.Context, asJSON bool) error {
-	views, err := c.app.List(ctx)
-	if err != nil {
-		return err
-	}
-
-	if asJSON {
-		return ui.JSON(c.out, views)
-	}
-
-	opt := ui.Options{Now: c.app.Now()}
-	if f, ok := c.out.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
-		if w, _, err := term.GetSize(int(f.Fd())); err == nil {
-			opt.Width = w
-		}
-	}
-	if err := ui.Table(c.out, views, opt); err != nil {
-		return err
-	}
-
-	if stray := c.app.StrayCredentials(); stray != "" {
-		c.errf("%s holds a sign-in that a claude run without cc-login wrote; move it into a login with: cc-login adopt NAME", stray)
-	}
-	return nil
+// errf prints a line on stderr.
+func (c *cli) errf(format string, args ...any) {
+	_, _ = fmt.Fprintf(c.err, "cc-login: "+format+"\n", args...)
 }
