@@ -83,10 +83,9 @@ func newApp(t *testing.T, logins map[string]*state.Login, def string, f *fake) *
 			}
 			return q, nil
 		},
-		QuotaCache: filepath.Join(t.TempDir(), "cache.json"),
-		Parallel:   2,
-		Timeout:    time.Second,
-		Log:        slog.New(slog.DiscardHandler),
+		Parallel: 2,
+		Timeout:  time.Second,
+		Log:      slog.New(slog.DiscardHandler),
 	}
 }
 
@@ -122,11 +121,6 @@ func TestList(t *testing.T) {
 	}
 	a := newApp(t, logins, "a1", f)
 
-	// The token login has a cached quota.
-	if err := os.WriteFile(a.QuotaCache, []byte(`{"dir:e5": {"five_hour": {"used_percentage": 40}, "at": 1795000000}}`), 0o600); err != nil {
-		t.Fatal(err)
-	}
-
 	views, err := a.List(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -146,24 +140,24 @@ func TestList(t *testing.T) {
 	cases := []struct {
 		name   string
 		status Status
-		source QuotaSource
+		quota  bool
 		gap    QuotaGap
 	}{
-		{"work", SignedIn, QuotaLive, GapNone},
-		{"soon", Expiring, QuotaLive, GapNone},
-		{"gone", SignedOut, QuotaNone, GapNone},
-		{"old", Expired, QuotaNone, GapNone},
-		{"ci", SignedIn, QuotaCache, GapToken},
-		{"api", SignedIn, QuotaNone, GapNoLogin},
-		{"stale", SignedIn, QuotaNone, GapStale},
-		{"flaky", SignedIn, QuotaNone, GapError},
+		{"work", SignedIn, true, GapNone},
+		{"soon", Expiring, true, GapNone},
+		{"gone", SignedOut, false, GapNone},
+		{"old", Expired, false, GapNone},
+		{"ci", SignedIn, false, GapToken},
+		{"api", SignedIn, false, GapNoLogin},
+		{"stale", SignedIn, false, GapStale},
+		{"flaky", SignedIn, false, GapError},
 	}
 
 	for _, tc := range cases {
 		v := byName[tc.name]
-		if v.Status != tc.status || v.QuotaSource != tc.source || v.QuotaGap != tc.gap {
-			t.Errorf("%s: status %v, source %v, gap %v; want %v, %v, %v",
-				tc.name, v.Status, v.QuotaSource, v.QuotaGap, tc.status, tc.source, tc.gap)
+		if v.Status != tc.status || v.HasQuota != tc.quota || v.QuotaGap != tc.gap {
+			t.Errorf("%s: status %v, quota %v, gap %v; want %v, %v, %v",
+				tc.name, v.Status, v.HasQuota, v.QuotaGap, tc.status, tc.quota, tc.gap)
 		}
 	}
 
@@ -175,9 +169,6 @@ func TestList(t *testing.T) {
 	}
 	if got := byName["api"]; got.Account != "API key …wxyz" || got.Plan != "api" {
 		t.Errorf("api: account %q, plan %q", got.Account, got.Plan)
-	}
-	if got := byName["ci"].CachedAt; !got.Equal(time.Unix(1795000000, 0)) {
-		t.Errorf("ci cached at %v", got)
 	}
 }
 
