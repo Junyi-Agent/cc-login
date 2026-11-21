@@ -59,13 +59,13 @@ REVIEWERS: dict[str, str] = {
         "time zones), races between the goroutines, ignored errors, tests that do not "
         "actually test the change, and behaviour that contradicts the doc comments."
     ),
-    "zsh-parity": (
-        "Focus: behaviour parity with the zsh original, cc-login.zsh, which this repo ports "
-        "(the environment variable CC_LOGIN_ZSH names its path; read it when set). A ported "
-        "command must keep the zsh version's output, exit codes, files written and data "
-        "layout (ROOT/NAME -> .dirs/ID links, NAME.json, current, .pending), because both "
-        "versions share one data directory. Also check README.md, CLAUDE.md and docs/adr/ "
-        "stay consistent with the code."
+    "design-docs": (
+        "Focus: the change against the design. Read the accepted ADRs in docs/adr/ (the "
+        "data layout in state.json, launching claude by exec, the internal/app layer, "
+        "cobra) and check the code follows them, or that the change updates the ADR. Check "
+        "data safety: state.json is written atomically under the lock, migrate keeps the "
+        "credentials directories and is safe to run twice, nothing deletes a login's data "
+        "by surprise. Check README.md, CLAUDE.md and docs/adr/ stay consistent with the code."
     ),
     "credentials-workflow": (
         "Focus: credential safety and repository workflow. A login's API key or token must "

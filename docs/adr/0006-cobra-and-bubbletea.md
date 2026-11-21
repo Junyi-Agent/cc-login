@@ -10,12 +10,11 @@
 
 - 命令行用 `spf13/cobra`，按 cobra 的常规用法：每个命令一个 `cobra.Command`，选项用 pflag 注册，参数检查用 `Args`（`ExactArgs`、`NoArgs` 和少量自定义校验），`--` 之后透传给 claude 的参数用 `ArgsLenAtDash` 判断。`add` 的 `--sign-in` / `--api-key` / `--oauth-token` 用 `MarkFlagsMutuallyExclusive`。
 - help、用法和参数报错用 cobra 生成的，不再要求与 zsh 版逐字节一致（用户 2026-11-21 决定）。报错统一是 `cc-login: <原因>`，命令行写错时再加一行 `Run 'cc-login CMD --help' for usage.`，退出码 1。报错不回显参数，以免误粘贴的 token 进终端记录。
-- 与 zsh 版逐字节一致的要求只保留给命令的输出、退出码、写的文件和数据目录布局（CLAUDE.md 的移植规则）。
-- 补全用 cobra 的 `completion` 命令（zsh、bash、fish、powershell），login 名字由 `ValidArgsFunction` 列出，选项由 cobra 自动补全，替代 zsh 版手写的 `_cc_login_complete`；zsh shim（0004）负责加载。
+- 补全用 cobra 的 `completion` 命令（zsh、bash、fish、powershell），login 名字由 `ValidArgsFunction` 列出，选项由 cobra 自动补全，替代 zsh 版手写的 `_cc_login_complete`；用户在 shell 配置里加载。
 - 交互界面用 `charmbracelet/bubbletea` + `bubbles` + `lipgloss`，入口是单独的 `cc-login tui`：显示和 `list` 相同的信息，可选中一个 login 执行 use / run / renew / remove。
-- `cc-login` 不带参数仍等于 `list`，纯文本输出与 zsh 版一致；TUI 只在显式调用、且 stdin 和 stdout 都是终端时启动，否则报错退出 1。
+- `cc-login` 不带参数仍等于 `list`；TUI 只在显式调用、且 stdin 和 stdout 都是终端时启动，否则报错退出 1。
 - 确认提问和不回显输入用 `charmbracelet/huh`，只在终端里用；非终端时与 zsh 版一样从 stdin 读，需要确认的命令提供 `--yes`。
-- lipgloss 只用于 TUI；`list` 的颜色继续用现有的 ANSI 码，保证与 zsh 版逐字节一致。
+- lipgloss 同时用于 TUI 和 `list` 的表格（0009）。
 
 ## 后果
 
