@@ -1,6 +1,6 @@
 # cc-login (Go)
 
-一台机器上管理多个 Claude Code 登录，claude 由 cc-login 用 exec 启动。最初是 `cc-login.zsh` 的 Go 移植，现在独立设计，不再与 zsh 版兼容（2026-11-21 用户决定）。用法和进度见 [[README]]，设计见 `docs/adr/`（0006–0013）。
+一台机器上管理多个 Claude Code 登录，claude 由 cc-login 用 exec 启动。最初是 `cc-login.zsh` 的 Go 移植，现在独立设计，不再与 zsh 版兼容（2026-11-21 用户决定）。上手见 [[README]]，用法见 [[docs/usage]]，开发和进度见 [[docs/development]]，设计见 `docs/adr/`（0006–0013）。
 
 ## 开发流程
 
@@ -34,7 +34,8 @@ pre-commit install
 - claude 只经 `cc-login run` 或 `claude` 链接用 exec 启动（[[docs/adr/0007-launch-claude-by-exec]]），不往 shell 导出凭据。
 - 分层和文件布局见 [[docs/adr/0012-code-layout]]：业务逻辑在 `internal/app`，不写 stdout、不依赖 cobra；`cmd/cc-login` 只做命令行。每个命令在 `cmd/cc-login/<命令>.go` 和 `internal/app/<命令>.go` 各一个文件；凭据目录里的东西（key/token 文件、access token、claude 的环境）只在 `internal/creds`。
 - help、用法和参数报错由 cobra 生成（[[docs/adr/0006-cobra-and-bubbletea]]）。选项注册给 cobra，参数检查用 cobra 的 `Args`，不手写解析。
-- 设置只来自环境变量（README 的设置表），新增时写进 README。
+- 设置只来自环境变量（`docs/usage.md` 的设置表），新增时写进那张表。
+- README 只放一句介绍和 Getting Started（安装、加 login、装 `claude` 链接、日常三条命令）；其余内容放 `docs/`。
 
 ## 安全
 

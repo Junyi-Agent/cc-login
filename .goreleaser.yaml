@@ -14,7 +14,7 @@ builds:
 
 archives:
   - formats: [tar.gz]
-    files: [README.md]
+    files: [README.md, docs/usage.md]
 
 checksum:
   name_template: checksums.txt
