@@ -13,7 +13,7 @@
   - `internal/claude`：找 claude、拼环境、`auth status` / `auth login` / `setup-token` / `auth logout`。
   - `internal/anthropic`：API 调用（检查 key 和 token、配额）。
   - `internal/quota`：配额的类型（0010 之后不再有缓存）。
-  - `internal/app`：每个命令一个函数（`List`、`Use`、`Add`、`Run`、`Rename`、`Remove`、`Migrate`…），参数进、结果或带类型的错误出（`ErrNotSetUp`、`ErrNoLogin`…），不写 stdout、不依赖 cobra。外部调用（claude、HTTP、钥匙串读取、时钟）通过结构体字段注入。
+  - `internal/app`：每个命令一个函数（`List`、`Use`、`Add`、`Run`、`Rename`、`Remove`…），参数进、结果或带类型的错误出（`ErrNotSetUp`、`ErrNoLogin`…），不写 stdout、不依赖 cobra。外部调用（claude、HTTP、钥匙串读取、时钟）通过结构体字段注入。
   - `internal/ui`：表格、JSON、提问；`cmd/cc-login` 只做 cobra 和输出。TUI 也调用 `internal/app`。
 - 类型：login 类型用 `Kind` 枚举，状态用 `Status` 枚举，时间用 `time.Time`；表格和 JSON 从同一个视图模型生成。
 - 表格用 `charmbracelet/lipgloss` 的 `table`；颜色由 lipgloss/termenv 判断（`NO_COLOR`、非终端、深浅背景），`CC_LOGIN_THEME` 可覆盖。

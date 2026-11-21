@@ -70,10 +70,3 @@ func (a *App) Names() []string {
 	}
 	return st.Names()
 }
-
-// Migrate converts the zsh version's data layout into state.json (ADR 0008).
-func (a *App) Migrate() (state.Migration, error) {
-	m, err := a.Store.Migrate(a.Now())
-	a.Log.Debug("migrate", "root", a.Store.Root, "already", m.Already, "logins", len(m.Logins), "backup", m.Backup, "err", err)
-	return m, err
-}

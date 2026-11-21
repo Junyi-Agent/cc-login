@@ -21,31 +21,6 @@ func TestLoadEmptyRoot(t *testing.T) {
 	}
 }
 
-func TestLoadLegacy(t *testing.T) {
-	cases := []struct {
-		name  string
-		setUp func(root string) error
-	}{
-		{"current", func(root string) error {
-			return os.WriteFile(filepath.Join(root, "current"), nil, 0o600)
-		}},
-		{"link", func(root string) error {
-			return os.Symlink(".dirs/A", filepath.Join(root, "work"))
-		}},
-	}
-
-	for _, tc := range cases {
-		root := t.TempDir()
-		if err := tc.setUp(root); err != nil {
-			t.Fatal(err)
-		}
-
-		if _, err := (&Store{Root: root}).Load(); !errors.Is(err, ErrLegacy) {
-			t.Errorf("%s: Load = %v; want ErrLegacy", tc.name, err)
-		}
-	}
-}
-
 func TestUpdateRoundTrip(t *testing.T) {
 	s := &Store{Root: t.TempDir()}
 	saved := time.Date(2026, 11, 21, 8, 0, 0, 0, time.UTC)

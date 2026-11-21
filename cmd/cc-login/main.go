@@ -98,29 +98,3 @@ func (c *cli) list(ctx context.Context, format string) error {
 	}
 	return nil
 }
-
-// migrate converts the zsh version's data layout and says what it did.
-func (c *cli) migrate() error {
-	m, err := c.app.Migrate()
-	if err != nil {
-		return err
-	}
-
-	if m.Already {
-		_, err = fmt.Fprintln(c.out, "Nothing to do: state.json is there.")
-		return err
-	}
-
-	for _, n := range m.Notes {
-		c.errf("%s", n)
-	}
-
-	def := m.Default
-	if def == "" {
-		def = "none"
-	}
-	_, err = fmt.Fprintf(c.out, "Migrated %d logins (default: %s). The old links and records are in %s.\n"+
-		"The zsh cc-login cannot read the new layout: stop loading it in your shell.\n",
-		len(m.Logins), def, m.Backup)
-	return err
-}

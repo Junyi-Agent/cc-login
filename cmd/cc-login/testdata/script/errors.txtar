@@ -18,7 +18,7 @@ stderr 'Run ''cc-login use --help'' for usage.'
 
 exec cc-login --help
 stdout 'Available Commands:'
-stdout 'migrate'
+stdout 'adopt'
 
 exec cc-login completion zsh
 stdout '#compdef cc-login'

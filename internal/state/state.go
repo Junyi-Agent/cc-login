@@ -48,17 +48,18 @@ type State struct {
 	Logins  map[string]*Login `json:"logins"`            // by ID
 }
 
+// The files in a credentials directory that hold an API key or a token:
+// file names, not secrets.
+const (
+	APIKeyFile = "api-key"     //nolint:gosec // G101: a file name
+	TokenFile  = "oauth-token" //nolint:gosec // G101: a file name
+)
+
 // Version is the state.json format this code writes.
 const Version = 1
 
-// Errors of the store.
-var (
-	// ErrLegacy: the data root has the zsh version's layout and no state.json.
-	ErrLegacy = errors.New("the logins are in the zsh version's layout; convert them with: cc-login migrate")
-
-	// ErrNoLogin: no login has that name.
-	ErrNoLogin = errors.New("no such login")
-)
+// ErrNoLogin means no login has that name.
+var ErrNoLogin = errors.New("no such login")
 
 // Store is the data root.
 type Store struct {
@@ -90,14 +91,10 @@ func (s *Store) path() string { return filepath.Join(s.Root, "state.json") }
 // the Keychain item after its SHA-256.
 func (s *Store) Dir(id string) string { return filepath.Join(s.Root, ".dirs", id) }
 
-// Load reads state.json. A machine without one has no logins, unless the
-// data root has the zsh version's layout: then it is ErrLegacy.
+// Load reads state.json. A machine without one has no logins.
 func (s *Store) Load() (*State, error) {
 	b, err := os.ReadFile(s.path())
 	if errors.Is(err, os.ErrNotExist) {
-		if s.hasLegacy() {
-			return nil, ErrLegacy
-		}
 		return &State{Version: Version, Logins: map[string]*Login{}}, nil
 	}
 	if err != nil {

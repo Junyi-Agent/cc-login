@@ -9,9 +9,8 @@ uses. cc-login launches claude itself (`cc-login run`, or a `claude` link to
 cc-login), with only that login's credentials in claude's environment.
 
 It began as a port of `cc-login.zsh` and is now its own design: a `state.json`
-data layout, claude launched by exec. `cc-login migrate` moves the zsh
-version's logins over. Decisions are in
-[docs/adr](docs/adr/README.md) (0006–0010).
+data layout, claude launched by exec. Decisions are in
+[docs/adr](docs/adr/README.md) (0006–0011).
 
 ## Status
 
@@ -22,7 +21,6 @@ version's logins over. Decisions are in
 | `use NAME` | makes a signed-in login the default |
 | `rename OLD NEW` | renames; the login stays signed in |
 | `remove NAME` | `claude auth logout`, then deletes the login; asks first (`--yes` without a terminal) |
-| `migrate` | converts the zsh version's data layout into `state.json` |
 | `version`, `--version` | the version and commit; `--verbose` (or `CC_LOGIN_DEBUG=1`) logs what any command does on stderr, never keys or tokens |
 | `completion` | zsh, bash, fish and powershell completion: commands, options, login names |
 | `add NAME` | a token from `claude setup-token` (the default, `--oauth-token`), an API key (`--api-key`), or a sign-in (`--sign-in [-- OPTS]`, through `claude auth login`); the key or token is shown as `*` while typed and checked with the API; without a terminal it is a line of stdin |
@@ -34,14 +32,13 @@ once; Ctrl-C stops it.
 
 ## Moving from the zsh version
 
-`cc-login migrate` writes `state.json` from the zsh version's links, records,
-`current` and `.pending`. The credentials directories stay where they are, so
-every login stays signed in; the old links and records move into
-`.legacy-<time>/` in the data directory. After that the zsh `cc-login` cannot
-read the logins: stop loading `cc-login.zsh` in your shell, and start claude
-through cc-login (next section). Scripts that read the old links and records
-(a status line, a quota refresh) stop finding the logins; see
-[ADR 0010](docs/adr/0010-statusline-and-quota-refresh.md).
+cc-login no longer converts the zsh version's data layout. To move those
+logins over, run `cc-login migrate` from the last version that has it, once
+([ADR 0011](docs/adr/0011-simplify.md)):
+
+```sh
+go run github.com/Junyi-Agent/cc-login/cmd/cc-login@6a3cea9 migrate
+```
 
 ## Starting claude
 
@@ -151,7 +148,7 @@ ADRs) are in [CLAUDE.md](CLAUDE.md); decisions in [docs/adr](docs/adr/README.md)
 
 | Package | What it does |
 |---|---|
-| `internal/state` | `state.json`: load, update under the lock, migrate from the zsh layout |
+| `internal/state` | `state.json`: load, update under the lock |
 | `internal/claude` | find claude, the environment of one login, `claude auth status` |
 | `internal/creds` | a login's key or token file; a sign-in's access token from `.credentials.json` or the Keychain |
 | `internal/anthropic` | the Anthropic API: the plan quota |
@@ -164,7 +161,7 @@ ADRs) are in [CLAUDE.md](CLAUDE.md); decisions in [docs/adr](docs/adr/README.md)
 
 1. ~~`list`, `list --json`~~
 2. ~~cobra: help, argument checks and completion~~ ([ADR 0006](docs/adr/0006-cobra-and-bubbletea.md))
-3. ~~the new structure: `state.json` and `cc-login migrate`, `internal/app`,
+3. ~~the new structure: `state.json`, `internal/app`,
    typed status, lipgloss table, testscript, `list --format`~~ ([ADR 0008](docs/adr/0008-state-json-layout.md),
    [ADR 0009](docs/adr/0009-code-structure.md))
 4. ~~`use`, `rename`, `remove`, `run`, and the `claude` link~~

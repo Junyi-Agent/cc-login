@@ -154,17 +154,6 @@ delete it with its credentials. It asks first; without a terminal, pass --yes.`,
 	}
 	remove.Flags().BoolP("yes", "y", false, "do not ask")
 
-	migrate := &cobra.Command{
-		Use:   "migrate",
-		Short: "Convert the zsh version's data layout into state.json",
-		Long: `Convert the logins of the zsh cc-login into state.json. The credentials
-directories stay where they are, so every login stays signed in; the old links
-and records move into a .legacy-<time> directory of the data root. After this
-the zsh cc-login cannot read the logins. Running it again does nothing.`,
-		Args: cobra.NoArgs,
-		RunE: c.runs(func(*cobra.Command, []string) error { return c.migrate() }),
-	}
-
 	adopt := &cobra.Command{
 		Use:   "adopt NAME",
 		Short: "Move ~/.claude/.credentials.json into a new login NAME",
@@ -186,7 +175,7 @@ credentials. cc-login list says when there is such a file.`,
 		}),
 	}
 
-	root.AddCommand(list, use, add, run, renew, rename, remove, adopt, migrate, versionCmd)
+	root.AddCommand(list, use, add, run, renew, rename, remove, adopt, versionCmd)
 	return root
 }
 
