@@ -81,32 +81,43 @@ func TestRename(t *testing.T) {
 
 func TestRemove(t *testing.T) {
 	ctx := context.Background()
-	yes := func(RemovePlan) bool { return true }
+	remove := func(a *App, name string) error {
+		p, err := a.PlanRemove(ctx, name)
+		if err != nil {
+			return err
+		}
+		return a.Remove(ctx, p)
+	}
 
-	t.Run("no", func(t *testing.T) {
+	t.Run("the plan changes nothing", func(t *testing.T) {
 		a, _ := three(t)
-		err := a.Remove(ctx, "work", func(RemovePlan) bool { return false })
-		if !errors.Is(err, ErrCancelled) || len(load(t, a).Logins) != 3 {
-			t.Errorf("remove, answered no = %v", err)
+
+		if _, err := a.PlanRemove(ctx, "work"); err != nil {
+			t.Fatal(err)
+		}
+		if len(load(t, a).Logins) != 3 {
+			t.Error("a login is gone")
 		}
 	})
 
 	t.Run("the default sign-in", func(t *testing.T) {
 		a, _ := three(t)
-		var plan RemovePlan
 		var loggedOut []string
 		a.Logout = func(_ context.Context, _ string, env []string) error {
 			loggedOut = env
 			return nil
 		}
 
-		err := a.Remove(ctx, "work", func(p RemovePlan) bool { plan = p; return true })
+		plan, err := a.PlanRemove(ctx, "work")
 		if err != nil {
 			t.Fatal(err)
 		}
-
-		if !plan.LogOut || !plan.Default || plan.Kind != state.SignIn {
+		if !plan.LogOut || !plan.Default || plan.Kind != state.SignIn || plan.ID != "a1" {
 			t.Errorf("plan = %+v", plan)
+		}
+
+		if err := a.Remove(ctx, plan); err != nil {
+			t.Fatal(err)
 		}
 		if lookup(loggedOut, "CLAUDE_SECURESTORAGE_CONFIG_DIR") != a.Store.Dir("a1") {
 			t.Errorf("logout ran in %q", lookup(loggedOut, "CLAUDE_SECURESTORAGE_CONFIG_DIR"))
@@ -128,7 +139,7 @@ func TestRemove(t *testing.T) {
 			return nil
 		}
 
-		if err := a.Remove(ctx, "api", yes); err != nil {
+		if err := remove(a, "api"); err != nil {
 			t.Fatal(err)
 		}
 	})
@@ -142,7 +153,7 @@ func TestRemove(t *testing.T) {
 			return nil
 		}
 
-		if err := a.Remove(ctx, "ci", yes); err != nil {
+		if err := remove(a, "ci"); err != nil {
 			t.Fatal(err)
 		}
 		if lookup(f.statusTo["t1"], "CLAUDE_CODE_OAUTH_TOKEN") != "" {
@@ -154,7 +165,7 @@ func TestRemove(t *testing.T) {
 		a, _ := three(t)
 		a.Logout = func(context.Context, string, []string) error { return errors.New("offline") }
 
-		err := a.Remove(ctx, "work", yes)
+		err := remove(a, "work")
 		if !errors.Is(err, ErrCancelled) {
 			t.Errorf("remove with a failed logout = %v", err)
 		}
@@ -171,15 +182,15 @@ func TestLaunch(t *testing.T) {
 	cases := []struct {
 		name    string
 		env     []string
-		want    string // the login, "" for an error
+		want    string // the ID of the login, "" for an error
 		key     string // ANTHROPIC_API_KEY in claude's environment
 		wantErr string
 	}{
-		{name: "", want: "work"},
-		{name: "api", want: "api", key: "secret-of-k1"},
-		{name: "", env: []string{"CC_LOGIN_ID=t1"}, want: "ci"},
-		{name: "", env: []string{"CC_LOGIN_ID=gone"}, want: "work"},
-		{name: "work", env: []string{"CC_LOGIN_ID=t1"}, want: "work"},
+		{name: "", want: "a1"},
+		{name: "api", want: "k1", key: "secret-of-k1"},
+		{name: "", env: []string{"CC_LOGIN_ID=t1"}, want: "t1"},
+		{name: "", env: []string{"CC_LOGIN_ID=gone"}, want: "a1"},
+		{name: "work", env: []string{"CC_LOGIN_ID=t1"}, want: "a1"},
 		{name: "nope", wantErr: "no such login"},
 		{name: "", env: []string{"CC_LOGIN_DEPTH=10"}, wantErr: "started itself"},
 	}
@@ -199,8 +210,9 @@ func TestLaunch(t *testing.T) {
 			t.Fatalf("Launch(%q) %v: %v", tc.name, tc.env, err)
 		}
 
-		if l.Name != tc.want || lookup(l.Env, "ANTHROPIC_API_KEY") != tc.key {
-			t.Errorf("Launch(%q) %v = %s with key %q; want %s, %q", tc.name, tc.env, l.Name, lookup(l.Env, "ANTHROPIC_API_KEY"), tc.want, tc.key)
+		id := lookup(l.Env, "CC_LOGIN_ID")
+		if id != tc.want || lookup(l.Env, "ANTHROPIC_API_KEY") != tc.key {
+			t.Errorf("Launch(%q) %v = %s with key %q; want %s, %q", tc.name, tc.env, id, lookup(l.Env, "ANTHROPIC_API_KEY"), tc.want, tc.key)
 		}
 		if got := lookup(l.Env, "CC_LOGIN_DEPTH"); got == "" || filepath.Base(lookup(l.Env, "CLAUDE_SECURESTORAGE_CONFIG_DIR")) != lookup(l.Env, "CC_LOGIN_ID") {
 			t.Errorf("Launch(%q): depth %q, id %q", tc.name, got, lookup(l.Env, "CC_LOGIN_ID"))

@@ -66,11 +66,10 @@ the one new claude launches use. Without a command it lists the logins.
 
 	add := &cobra.Command{
 		Use:   "add NAME [--sign-in [-- OPTS...] | --api-key | --oauth-token]",
-		Short: "Save a new login, or a token for login NAME",
-		Long: `Save login NAME. Without an option, read a token from claude setup-token
+		Short: "Save a new login NAME",
+		Long: `Save a new login NAME. Without an option, read a token from claude setup-token
 (sk-ant-oat...), shown as *, and check it with the Anthropic API; it lasts a
-year. For an existing login NAME the token overrides its stored sign-in.
-A new login becomes the default when the machine has none.
+year. The new login becomes the default when the machine has none.
 
 Without a terminal, the key or token is one line of stdin.`,
 		Example: `  cc-login add work

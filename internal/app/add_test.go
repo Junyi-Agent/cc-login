@@ -193,50 +193,30 @@ func TestAddUnchecked(t *testing.T) {
 	}
 }
 
+// A name that exists cannot take a new login of any kind, a token on top
+// of a sign-in included.
 func TestAddExisting(t *testing.T) {
-	logins := func() map[string]*state.Login {
-		return map[string]*state.Login{
-			"a1": {Name: "work", Kind: state.SignIn, Account: "me@example.com"},
-			"t1": {Name: "ci", Kind: state.Token},
-			"k1": {Name: "api", Kind: state.APIKey},
-			"o1": {Name: "off", Kind: state.SignIn},
-		}
-	}
-	signed := map[string]claude.Status{"a1": {SignedIn: true}, "t1": {SignedIn: true}}
-
 	cases := []struct {
 		name string
 		kind state.Kind
-		want string // "" for success
 	}{
-		{"ci", state.Token, "cc-login renew ci"},
-		{"api", state.Token, "an API key login"},
-		{"work", state.SignIn, "is signed in"},
-		{"work", state.APIKey, "is signed in"},
-		{"work", state.Token, ""}, // on top of the sign-in
-		{"off", state.SignIn, ""}, // signed out: its directory is reused
+		{"work", state.Token},
+		{"work", state.SignIn},
+		{"ci", state.Token},
+		{"api", state.APIKey},
 	}
 
 	for _, tc := range cases {
-		f := &fake{status: map[string]claude.Status{}}
-		for k, v := range signed {
-			f.status[k] = v
-		}
-		a := addApp(t, logins(), "a1", f)
-		p := &prompts{secrets: []string{goodToken}}
+		a, _ := three(t)
 
-		res, err := a.Add(context.Background(), tc.name, tc.kind, nil, p)
-		switch {
-		case tc.want == "" && err != nil:
-			t.Errorf("add %s %s: %v", tc.name, tc.kind, err)
-		case tc.want != "" && (err == nil || !strings.Contains(err.Error(), tc.want)):
-			t.Errorf("add %s %s = %v; want %q", tc.name, tc.kind, err, tc.want)
-		case tc.want == "":
-			st := load(t, a)
-			id, l, _ := st.ByName(tc.name)
-			if len(st.Logins) != 4 || (tc.name == "work" && (id != "a1" || l.Kind != state.Token || !res.OverSignIn)) {
-				t.Errorf("add %s %s: logins %v, %s is %+v", tc.name, tc.kind, st.Names(), id, l)
-			}
+		_, err := a.Add(context.Background(), tc.name, tc.kind, nil, &prompts{secrets: []string{goodToken}})
+		if err == nil || !strings.Contains(err.Error(), "cc-login renew "+tc.name) {
+			t.Errorf("add %s %s = %v; want the renew hint", tc.name, tc.kind, err)
+		}
+
+		dirs, _ := os.ReadDir(filepath.Join(a.Store.Root, ".dirs"))
+		if len(dirs) != 3 || len(load(t, a).Logins) != 3 {
+			t.Errorf("add %s %s: %d directories, %d logins; want 3, 3", tc.name, tc.kind, len(dirs), len(load(t, a).Logins))
 		}
 	}
 }

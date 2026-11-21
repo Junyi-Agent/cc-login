@@ -22,25 +22,19 @@ var (
 // cc-login without a real claude between them loops.
 const maxDepth = 10
 
-// signedIn runs claude auth status for the login with that ID; stored says
-// to look at the sign-in stored in its directory only, without its key or
-// token.
-func (a *App) signedIn(ctx context.Context, id string, l *state.Login, stored bool) (bool, error) {
+// authStatus runs claude auth status with env.
+func (a *App) authStatus(ctx context.Context, env []string) (claude.Status, error) {
 	path, err := a.FindClaude()
 	if err != nil {
-		return false, err
+		return claude.Status{}, err
 	}
+	return a.AuthStatus(ctx, path, env)
+}
 
-	dir := a.Store.Dir(id)
-	env := claude.StoredEnv(a.Env, dir)
-	if !stored {
-		if env, err = claude.Env(a.Env, dir, l.Kind); err != nil {
-			return false, err
-		}
-	}
-
-	st, err := a.AuthStatus(ctx, path, env)
-	return st.SignedIn, err
+// storedEnv is the environment in which claude sees only the sign-in stored
+// for the login with that ID, not the login's key or token.
+func (a *App) storedEnv(id string) []string {
+	return claude.StoredEnv(a.Env, a.Store.Dir(id))
 }
 
 // Use makes login name the default. A login that is not signed in cannot be
@@ -56,11 +50,16 @@ func (a *App) Use(ctx context.Context, name string) error {
 		return err
 	}
 
-	ok, err := a.signedIn(ctx, id, l, false)
+	env, err := claude.Env(a.Env, a.Store.Dir(id), l.Kind)
 	if err != nil {
 		return err
 	}
-	if !ok {
+
+	cs, err := a.authStatus(ctx, env)
+	if err != nil {
+		return err
+	}
+	if !cs.SignedIn {
 		return fmt.Errorf("login %s is signed out; sign it in with: cc-login renew %s", name, name)
 	}
 
@@ -93,49 +92,53 @@ func (a *App) Rename(old, name string) error {
 	})
 }
 
-// RemovePlan is what Remove is about to do, for the confirmation.
+// RemovePlan is what removing a login does, for the confirmation.
 type RemovePlan struct {
+	ID      string
 	Name    string
 	Kind    state.Kind
 	Default bool // the default login: afterwards there is none
 	LogOut  bool // a sign-in is stored: claude auth logout revokes it first
 }
 
-// Remove signs login name out and deletes it, after confirm agrees to the
-// plan. The logout revokes a stored sign-in at Anthropic; a key or token
-// stays valid until it is revoked or expires.
-func (a *App) Remove(ctx context.Context, name string, confirm func(RemovePlan) bool) error {
+// PlanRemove says what removing login name does.
+func (a *App) PlanRemove(ctx context.Context, name string) (RemovePlan, error) {
 	st, err := a.Store.Load()
 	if err != nil {
-		return err
+		return RemovePlan{}, err
 	}
 
 	id, l, err := st.ByName(name)
 	if err != nil {
-		return err
+		return RemovePlan{}, err
 	}
 
-	plan := RemovePlan{Name: name, Kind: l.Kind, Default: st.Default == id}
+	plan := RemovePlan{ID: id, Name: name, Kind: l.Kind, Default: st.Default == id}
 	if l.Kind != state.APIKey {
-		if plan.LogOut, err = a.signedIn(ctx, id, l, true); err != nil {
-			return err
+		cs, err := a.authStatus(ctx, a.storedEnv(id))
+		if err != nil {
+			return RemovePlan{}, err
 		}
+		plan.LogOut = cs.SignedIn
 	}
 
-	if !confirm(plan) {
-		return ErrCancelled
-	}
+	return plan, nil
+}
 
-	a.Log.Debug("remove", "login", name, "id", id, "logout", plan.LogOut)
-	if plan.LogOut {
-		if err = a.logout(ctx, id); err != nil {
+// Remove signs the login of plan p out and deletes it. The logout revokes a
+// stored sign-in at Anthropic; a key or token stays valid until it is
+// revoked or expires.
+func (a *App) Remove(ctx context.Context, p RemovePlan) error {
+	a.Log.Debug("remove", "login", p.Name, "id", p.ID, "logout", p.LogOut)
+	if p.LogOut {
+		if err := a.logout(ctx, p.ID); err != nil {
 			return fmt.Errorf("%w: claude auth logout failed: %w", ErrCancelled, err)
 		}
 	}
 
-	err = a.Store.Update(func(st *state.State) error {
-		delete(st.Logins, id)
-		if st.Default == id {
+	err := a.Store.Update(func(st *state.State) error {
+		delete(st.Logins, p.ID)
+		if st.Default == p.ID {
 			st.Default = ""
 		}
 		return nil
@@ -144,7 +147,7 @@ func (a *App) Remove(ctx context.Context, name string, confirm func(RemovePlan) 
 		return err
 	}
 
-	return os.RemoveAll(a.Store.Dir(id))
+	return os.RemoveAll(a.Store.Dir(p.ID))
 }
 
 // logout runs claude auth logout on the sign-in stored for the login.
@@ -153,14 +156,13 @@ func (a *App) logout(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
-	return a.Logout(ctx, path, claude.StoredEnv(a.Env, a.Store.Dir(id)))
+	return a.Logout(ctx, path, a.storedEnv(id))
 }
 
 // Launch is how to start claude with a login.
 type Launch struct {
 	Path string   // the claude executable
 	Env  []string // its environment: the login's credentials, nobody else's
-	Name string   // the login
 }
 
 // Launch prepares a claude run with login name. Without a name it is the
@@ -195,7 +197,7 @@ func (a *App) Launch(name string) (Launch, error) {
 	env = append(env, "CC_LOGIN_ID="+id, "CC_LOGIN_DEPTH="+strconv.Itoa(depth+1))
 	a.Log.Debug("launch", "login", l.Name, "id", id, "kind", l.Kind, "claude", path, "depth", depth+1)
 
-	return Launch{Path: path, Env: env, Name: l.Name}, nil
+	return Launch{Path: path, Env: env}, nil
 }
 
 // launchID picks the login for Launch.

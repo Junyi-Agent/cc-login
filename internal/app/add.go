@@ -1,6 +1,7 @@
 package app
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -27,59 +28,62 @@ type Prompter interface {
 // tokenLife is how long a setup-token token lasts; claude does not say.
 const tokenLife = 365 * 24 * time.Hour
 
-// Added is what Add or Renew did, for the message.
+// Added is what Add, Adopt or Renew did, for the message.
 type Added struct {
 	Name          string
-	Kind          state.Kind
 	Account       string
 	BecameDefault bool
-	OverSignIn    bool      // a token added to a login with a stored sign-in
 	ExpiresAt     time.Time // zero when unknown
 }
 
-// Add saves login name of that kind: a token from claude setup-token, an
-// API key, or a sign-in with claude auth login (args are its options). A
-// token can also go on top of an existing sign-in login, where it overrides
-// the stored sign-in. A new login becomes the default when there is none.
+// Add saves a new login name of that kind: a token from claude setup-token,
+// an API key, or a sign-in with claude auth login (args are its options).
+// It becomes the default when there is none.
 func (a *App) Add(ctx context.Context, name string, kind state.Kind, args []string, p Prompter) (Added, error) {
-	if err := state.CheckName(name); err != nil {
+	if err := a.checkNewName(name); err != nil {
 		return Added{}, err
+	}
+
+	id, err := a.Store.NewDir()
+	if err != nil {
+		return Added{}, err
+	}
+
+	l := &state.Login{Name: name, Kind: kind, CreatedAt: a.Now().UTC()}
+	if err := a.authenticate(ctx, id, l, args, p); err != nil {
+		_ = os.RemoveAll(a.Store.Dir(id)) // nothing left behind
+		return Added{}, err
+	}
+
+	return a.addLogin(id, l)
+}
+
+// checkNewName checks that name can name a new login.
+func (a *App) checkNewName(name string) error {
+	if err := state.CheckName(name); err != nil {
+		return err
 	}
 
 	st, err := a.Store.Load()
 	if err != nil {
-		return Added{}, err
+		return err
 	}
 
-	id, old, err := a.addTarget(ctx, st, name, kind)
-	if err != nil {
-		return Added{}, err
+	if _, _, err := st.ByName(name); err == nil {
+		return fmt.Errorf("login %s exists; sign it in again with cc-login renew %s, or remove it first", name, name)
 	}
+	return nil
+}
 
-	isNew := old == nil
-	if isNew {
-		if id, err = a.Store.NewDir(); err != nil {
-			return Added{}, err
-		}
-	}
-
-	l, err := a.authenticate(ctx, id, name, kind, args, old, p)
-	if err != nil {
-		if isNew {
-			_ = os.RemoveAll(a.Store.Dir(id)) // nothing left behind
-		}
-		return Added{}, err
-	}
-
-	res := Added{Name: name, Kind: kind, Account: l.Account, OverSignIn: old != nil && old.Kind == state.SignIn && kind == state.Token}
+// addLogin puts new login l, in the directory of id, into state.json. It
+// becomes the default when there is none.
+func (a *App) addLogin(id string, l *state.Login) (Added, error) {
+	res := Added{Name: l.Name, Account: l.Account}
 	if l.TokenExpiresAt != nil {
 		res.ExpiresAt = *l.TokenExpiresAt
 	}
 
-	err = a.Store.Update(func(st *state.State) error {
-		if isNew {
-			l.CreatedAt = a.Now().UTC()
-		}
+	err := a.Store.Update(func(st *state.State) error {
 		st.Logins[id] = l
 		if st.Logins[st.Default] == nil {
 			st.Default, res.BecameDefault = id, true
@@ -89,72 +93,50 @@ func (a *App) Add(ctx context.Context, name string, kind state.Kind, args []stri
 	return res, err
 }
 
-// addTarget checks that login name can take a new login of that kind. It
-// returns the existing login and its ID, or nil for a new one.
-func (a *App) addTarget(ctx context.Context, st *state.State, name string, kind state.Kind) (string, *state.Login, error) {
-	id, old, err := st.ByName(name)
-	if errors.Is(err, state.ErrNoLogin) {
-		return "", nil, nil
-	}
-
-	switch {
-	case kind == state.Token && old.Kind == state.APIKey:
-		return "", nil, fmt.Errorf("login %s is an API key login; add the token as a separate login", name)
-	case kind == state.Token && old.Kind == state.Token:
-		return "", nil, fmt.Errorf("login %s has a token; save a new one with: cc-login renew %s", name, name)
-	case kind == state.Token:
-		return id, old, nil // on top of the sign-in
-	}
-
-	signed, err := a.signedIn(ctx, id, old, false)
-	if err != nil {
-		return "", nil, err
-	}
-	if signed {
-		return "", nil, fmt.Errorf("login %s is signed in; sign it in again with: cc-login renew %s", name, name)
-	}
-	return id, old, nil // signed out: reuse its directory
-}
-
-// authenticate puts the credentials of the login into its directory and
-// returns its new entry for state.json.
-func (a *App) authenticate(ctx context.Context, id, name string, kind state.Kind, args []string, old *state.Login, p Prompter) (*state.Login, error) {
+// authenticate puts the credentials of login l into the directory of id, and
+// records in l what it learns of the account.
+func (a *App) authenticate(ctx context.Context, id string, l *state.Login, args []string, p Prompter) error {
 	dir := a.Store.Dir(id)
-	l := &state.Login{Name: name, Kind: kind}
-	if old != nil {
-		*l = *old
-		l.Kind = kind
-	}
 
-	switch kind {
+	switch l.Kind {
 	case state.APIKey:
-		return l, a.saveKey(ctx, dir, l, p)
+		return a.saveKey(ctx, dir, l, p)
 	case state.Token:
-		return l, a.saveToken(ctx, dir, l, old == nil || old.Account == "", p)
+		return a.saveToken(ctx, dir, l, p)
 	case state.SignIn:
 	}
 
+	return a.signIn(ctx, id, l, args)
+}
+
+// signIn runs claude auth login for login l, then reads the account.
+func (a *App) signIn(ctx context.Context, id string, l *state.Login, args []string) error {
 	path, err := a.FindClaude()
 	if err != nil {
-		return nil, err
+		return err
 	}
-	env := claude.StoredEnv(a.Env, dir)
+	env := a.storedEnv(id)
 
-	a.Log.Debug("claude auth login", "login", name, "id", id, "claude", path, "options", len(args))
+	a.Log.Debug("claude auth login", "login", l.Name, "id", id, "claude", path, "options", len(args))
 	if err = a.SignIn(ctx, path, env, args); err != nil {
-		return nil, fmt.Errorf("claude auth login: %w", err)
+		return fmt.Errorf("claude auth login: %w", err)
 	}
 
 	cs, err := a.AuthStatus(ctx, path, env)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if !cs.SignedIn {
-		return nil, errors.New("claude auth login ended, but the login is not signed in")
+		return errors.New("claude auth login ended, but the login is not signed in")
 	}
 
+	setAccount(l, cs)
+	return nil
+}
+
+// setAccount records in l the account claude auth status reported.
+func setAccount(l *state.Login, cs claude.Status) {
 	l.Account, l.OrgID, l.OrgName, l.Plan = cs.Email, cs.OrgID, cs.OrgName, cs.Plan
-	return l, nil
 }
 
 // saveKey reads an API key, checks it with the API and saves it.
@@ -183,14 +165,13 @@ func (a *App) saveKey(ctx context.Context, dir string, l *state.Login, p Prompte
 	}
 
 	l.KeyHint = key[len(key)-4:]
-	l.Account, l.OrgID, l.OrgName, l.Plan = "", "", "", ""
 	return nil
 }
 
 // saveToken reads a token from claude setup-token, checks it with the API
-// and saves it. askAccount says to ask for the account to show: a token
-// cannot read it.
-func (a *App) saveToken(ctx context.Context, dir string, l *state.Login, askAccount bool, p Prompter) error {
+// and saves it. A token cannot read its account, so it asks for one to show
+// when the login has none.
+func (a *App) saveToken(ctx context.Context, dir string, l *state.Login, p Prompter) error {
 	p.Note("In another terminal run: claude setup-token. A browser opens; choose the account of login " + l.Name + ", then paste the token it prints (sk-ant-oat...).")
 	valid := validPrefix("sk-ant-oat")
 	tok, err := p.Secret("Token for "+l.Name, "From claude setup-token; it shows as *.", valid)
@@ -215,13 +196,13 @@ func (a *App) saveToken(ctx context.Context, dir string, l *state.Login, askAcco
 		return err
 	}
 
-	if askAccount {
+	if l.Account == "" {
 		if acct, err := p.Line("Account of "+l.Name, "The email to show in cc-login list; a token cannot read it. Enter skips."); err == nil && acct != "" {
 			l.Account = strings.Join(strings.Fields(acct), "")
 		}
 	}
 
-	a.tokenOrg(l, org, p)
+	a.tokenOrg(l, org)
 
 	now := a.Now().UTC()
 	expires := now.Add(tokenLife)
@@ -232,13 +213,12 @@ func (a *App) saveToken(ctx context.Context, dir string, l *state.Login, askAcco
 // tokenOrg records the token's organization. The organization's name, and
 // the plan of the same account in it, come from other logins: a token
 // cannot read them.
-func (a *App) tokenOrg(l *state.Login, org string, p Prompter) {
+func (a *App) tokenOrg(l *state.Login, org string) {
 	if org == "" {
 		return
 	}
 
-	if l.OrgID != "" && l.OrgID != org {
-		p.Note("The token belongs to another organization than the login had; the login now shows the token's.")
+	if l.OrgID != org {
 		l.OrgName, l.Plan = "", ""
 	}
 	l.OrgID = org
@@ -283,25 +263,25 @@ func (a *App) Renew(ctx context.Context, name string, args []string, p Prompter)
 
 	before := a.expiry(ctx, id, old)
 
-	l, err := a.authenticate(ctx, id, name, old.Kind, args, old, p)
-	if err != nil {
+	l := *old
+	if err = a.authenticate(ctx, id, &l, args, p); err != nil {
 		return Added{}, a.renewFailed(ctx, id, old, err)
 	}
 
 	if old.OrgID != "" && l.OrgID != "" && l.OrgID != old.OrgID {
-		p.Note(fmt.Sprintf("Login %s was in organization %s and is now in %s: the browser may have picked another one.", name, orDash(old.OrgName), orDash(l.OrgName)))
+		p.Note(fmt.Sprintf("Login %s was in organization %s and is now in %s: the browser may have picked another one.",
+			name, cmp.Or(old.OrgName, old.OrgID), cmp.Or(l.OrgName, l.OrgID)))
 	}
 
 	err = a.Store.Update(func(st *state.State) error {
-		st.Logins[id] = l
+		st.Logins[id] = &l
 		return nil
 	})
 	if err != nil {
 		return Added{}, err
 	}
 
-	res := Added{Name: name, Kind: l.Kind, Account: l.Account}
-	res.ExpiresAt = a.expiry(ctx, id, l)
+	res := Added{Name: name, Account: l.Account, ExpiresAt: a.expiry(ctx, id, &l)}
 	if l.Kind == state.SignIn && !res.ExpiresAt.IsZero() && !res.ExpiresAt.After(before) {
 		return res, errors.New("signed in again, but the expiry did not move")
 	}
@@ -317,11 +297,7 @@ func (a *App) expiry(ctx context.Context, id string, l *state.Login) time.Time {
 		return time.Time{}
 	}
 
-	path, err := a.FindClaude()
-	if err != nil {
-		return time.Time{}
-	}
-	cs, err := a.AuthStatus(ctx, path, claude.StoredEnv(a.Env, a.Store.Dir(id)))
+	cs, err := a.authStatus(ctx, a.storedEnv(id))
 	if err != nil || !cs.SignedIn {
 		return time.Time{}
 	}
@@ -334,7 +310,8 @@ func (a *App) renewFailed(ctx context.Context, id string, l *state.Login, err er
 		return err
 	}
 
-	if ok, _ := a.signedIn(context.WithoutCancel(ctx), id, l, true); ok {
+	// After Ctrl-C too.
+	if cs, errStatus := a.authStatus(context.WithoutCancel(ctx), a.storedEnv(id)); errStatus == nil && cs.SignedIn {
 		return fmt.Errorf("%w; login %s keeps the sign-in it had", err, l.Name)
 	}
 	return fmt.Errorf("%w; login %s is signed out", err, l.Name)
@@ -366,16 +343,8 @@ func (a *App) Adopt(ctx context.Context, name string) (Added, error) {
 		return Added{}, errors.New("there is no ~/.claude/.credentials.json to adopt")
 	}
 
-	if err := state.CheckName(name); err != nil {
+	if err := a.checkNewName(name); err != nil {
 		return Added{}, err
-	}
-
-	st, err := a.Store.Load()
-	if err != nil {
-		return Added{}, err
-	}
-	if _, _, errName := st.ByName(name); errName == nil {
-		return Added{}, fmt.Errorf("login %s exists", name)
 	}
 
 	id, err := a.Store.NewDir()
@@ -390,21 +359,11 @@ func (a *App) Adopt(ctx context.Context, name string) (Added, error) {
 	}
 
 	l := &state.Login{Name: name, Kind: state.SignIn, CreatedAt: a.Now().UTC()}
-	if path, errFind := a.FindClaude(); errFind == nil {
-		if cs, errStatus := a.AuthStatus(ctx, path, claude.StoredEnv(a.Env, dir)); errStatus == nil {
-			l.Account, l.OrgID, l.OrgName, l.Plan = cs.Email, cs.OrgID, cs.OrgName, cs.Plan
-		}
+	if cs, errStatus := a.authStatus(ctx, a.storedEnv(id)); errStatus == nil {
+		setAccount(l, cs)
 	}
 
-	res := Added{Name: name, Kind: state.SignIn, Account: l.Account}
-	err = a.Store.Update(func(st *state.State) error {
-		st.Logins[id] = l
-		if st.Logins[st.Default] == nil {
-			st.Default, res.BecameDefault = id, true
-		}
-		return nil
-	})
-	return res, err
+	return a.addLogin(id, l)
 }
 
 // validPrefix checks a pasted key or token: the prefix, and no spaces.
@@ -422,11 +381,4 @@ func httpStatus(status int) string {
 		return "no response"
 	}
 	return fmt.Sprintf("HTTP %d", status)
-}
-
-func orDash(s string) string {
-	if s == "" {
-		return "-"
-	}
-	return s
 }

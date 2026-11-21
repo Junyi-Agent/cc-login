@@ -28,7 +28,7 @@ stdin token
 ! exec cc-login add ci
 stderr 'cc-login renew ci'
 ! exec cc-login add home --sign-in
-stderr 'login home is signed in'
+stderr 'login home exists'
 ! exec cc-login add bad --api-key
 stderr 'no input'
 ! exec cc-login add ci2 -- --email x

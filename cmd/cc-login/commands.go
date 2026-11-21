@@ -34,13 +34,16 @@ func (c *cli) rename(old, name string) error {
 }
 
 func (c *cli) remove(ctx context.Context, name string, yes bool) error {
-	var plan app.RemovePlan
-	confirm := func(p app.RemovePlan) bool {
-		plan = p
-		return yes || c.confirm(fmt.Sprintf("Remove login %s?", p.Name), removeNotes(p))
+	plan, err := c.app.PlanRemove(ctx, name)
+	if err != nil {
+		return err
 	}
 
-	if err := c.app.Remove(ctx, name, confirm); err != nil {
+	if !yes && !c.confirm(fmt.Sprintf("Remove login %s?", name), removeNotes(plan)) {
+		return app.ErrCancelled
+	}
+
+	if err := c.app.Remove(ctx, plan); err != nil {
 		return err
 	}
 
@@ -136,13 +139,9 @@ func (c *cli) adopt(ctx context.Context, name string) error {
 	return c.addNotes(res)
 }
 
-// addNotes say whether the new login is the default, and about its token.
+// addNotes say when the new login's token expires, and whether the login
+// is the default.
 func (c *cli) addNotes(res app.Added) error {
-	if res.OverSignIn {
-		if err := c.say("The token overrides the sign-in stored in %s.", res.Name); err != nil {
-			return err
-		}
-	}
 	if !res.ExpiresAt.IsZero() {
 		if err := c.say("The token expires about %s.", res.ExpiresAt.Local().Format("2006-01-02")); err != nil {
 			return err
