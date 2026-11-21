@@ -29,7 +29,7 @@ the one new claude launches use. Without a command it lists the logins.
 		SuggestionsMinimumDistance: 2,
 		SilenceErrors:              true,
 		SilenceUsage:               true,
-		RunE:                       c.runs(func(cmd *cobra.Command, _ []string) error { return c.list(cmd.Context(), false) }),
+		RunE:                       func(cmd *cobra.Command, _ []string) error { return c.list(cmd.Context(), false) },
 	}
 	root.SetOut(c.out)
 	root.SetErr(c.err)
@@ -38,20 +38,29 @@ the one new claude launches use. Without a command it lists the logins.
 	root.Version = versionString()
 	root.SetVersionTemplate("cc-login {{.Version}}\n")
 	root.PersistentFlags().BoolP("verbose", "v", false, "log what cc-login does on stderr (also CC_LOGIN_DEBUG=1); never keys or tokens")
-	root.PersistentPreRun = func(cmd *cobra.Command, _ []string) {
+	// cobra runs this after the argument checks, so run can tell a wrong
+	// command line from a failed command. It checks the option groups
+	// (--sign-in, --api-key, --oauth-token) only later: check them first.
+	root.PersistentPreRunE = func(cmd *cobra.Command, _ []string) error {
+		if err := cmd.ValidateFlagGroups(); err != nil {
+			return err
+		}
+		c.ran = true
+
 		if v, _ := cmd.Flags().GetBool("verbose"); v || os.Getenv("CC_LOGIN_DEBUG") == "1" {
 			c.app.Log = slog.New(slog.NewTextHandler(c.err, &slog.HandlerOptions{Level: slog.LevelDebug}))
 		}
+		return nil
 	}
 
 	list := &cobra.Command{
 		Use:   "list",
 		Short: "List the logins; ▸ marks the default",
 		Args:  cobra.NoArgs,
-		RunE: c.runs(func(cmd *cobra.Command, _ []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			asJSON, _ := cmd.Flags().GetBool("json")
 			return c.list(cmd.Context(), asJSON)
-		}),
+		},
 	}
 	list.Flags().Bool("json", false, "print JSON, for scripts")
 
@@ -61,7 +70,7 @@ the one new claude launches use. Without a command it lists the logins.
 		Long:              "Make login NAME the default: the login of claude through cc-login. Running claudes keep theirs.",
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: c.completeName,
-		RunE:              c.runs(func(cmd *cobra.Command, args []string) error { return c.use(cmd.Context(), args[0]) }),
+		RunE:              func(cmd *cobra.Command, args []string) error { return c.use(cmd.Context(), args[0]) },
 	}
 
 	add := &cobra.Command{
@@ -76,7 +85,7 @@ Without a terminal, the key or token is one line of stdin.`,
   cc-login add work --sign-in -- --email me@example.com
   cc-login add ci --api-key`,
 		Args: c.nameThenOpts,
-		RunE: c.runs(func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			kind := state.Token
 			if v, _ := cmd.Flags().GetBool("api-key"); v {
 				kind = state.APIKey
@@ -85,7 +94,7 @@ Without a terminal, the key or token is one line of stdin.`,
 				kind = state.SignIn
 			}
 			return c.add(cmd.Context(), args[0], kind, args[1:])
-		}),
+		},
 	}
 	add.Flags().Bool("sign-in", false, "sign in with claude auth login, which keeps the sign-in in the macOS Keychain; its options go after --")
 	add.Flags().Bool("api-key", false, "save an Anthropic API key (sk-ant-...), shown as * while typed, and checked with the Anthropic API")
@@ -106,10 +115,10 @@ named claude to cc-login, early in PATH, does the same as cc-login run --.`,
   cc-login run ci -- -p "summarize the diff"`,
 		Args:              c.optionalNameThenOpts,
 		ValidArgsFunction: c.completeName,
-		RunE: c.runs(func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			name, rest := splitDash(cmd, args)
 			return c.launch(name, rest)
-		}),
+		},
 	}
 
 	renew := &cobra.Command{
@@ -120,9 +129,9 @@ that it expires later; OPTS are options for claude auth login. For a token
 login, save a new token from claude setup-token.`,
 		Args:              c.nameThenOpts,
 		ValidArgsFunction: c.completeName,
-		RunE: c.runs(func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			return c.renew(cmd.Context(), args[0], args[1:])
-		}),
+		},
 	}
 
 	rename := &cobra.Command{
@@ -131,7 +140,7 @@ login, save a new token from claude setup-token.`,
 		Long:              "Rename login OLD to NEW. It stays signed in, and running claudes keep working.",
 		Args:              cobra.ExactArgs(2),
 		ValidArgsFunction: c.completeName,
-		RunE:              c.runs(func(_ *cobra.Command, args []string) error { return c.rename(args[0], args[1]) }),
+		RunE:              func(_ *cobra.Command, args []string) error { return c.rename(args[0], args[1]) },
 	}
 
 	remove := &cobra.Command{
@@ -141,10 +150,10 @@ login, save a new token from claude setup-token.`,
 delete it with its credentials. It asks first; without a terminal, pass --yes.`,
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: c.completeName,
-		RunE: c.runs(func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			yes, _ := cmd.Flags().GetBool("yes")
 			return c.remove(cmd.Context(), args[0], yes)
-		}),
+		},
 	}
 	remove.Flags().BoolP("yes", "y", false, "do not ask")
 
@@ -157,29 +166,20 @@ it moves it, never copies it, because two copies of one sign-in invalidate
 each other. claude sessions that read it from ~/.claude lose their
 credentials. cc-login list says when there is such a file.`,
 		Args: cobra.ExactArgs(1),
-		RunE: c.runs(func(cmd *cobra.Command, args []string) error { return c.adopt(cmd.Context(), args[0]) }),
+		RunE: func(cmd *cobra.Command, args []string) error { return c.adopt(cmd.Context(), args[0]) },
 	}
 
 	versionCmd := &cobra.Command{
 		Use:   "version",
 		Short: "Print the version of cc-login",
 		Args:  cobra.NoArgs,
-		RunE: c.runs(func(*cobra.Command, []string) error {
+		RunE: func(*cobra.Command, []string) error {
 			return c.say("cc-login %s (%s)", versionString(), goVersion())
-		}),
+		},
 	}
 
 	root.AddCommand(list, use, add, run, renew, rename, remove, adopt, versionCmd)
 	return root
-}
-
-// runs marks that the command line passed cobra's checks before fn runs, so
-// run can tell a wrong command line from a failed command.
-func (c *cli) runs(fn func(*cobra.Command, []string) error) func(*cobra.Command, []string) error {
-	return func(cmd *cobra.Command, args []string) error {
-		c.ran = true
-		return fn(cmd, args)
-	}
 }
 
 // noCommand rejects arguments to cc-login itself: the first one is not a
@@ -202,13 +202,18 @@ func (c *cli) noCommand(cmd *cobra.Command, args []string) error {
 	return fmt.Errorf("unknown command %q", arg)
 }
 
-// nameThenOpts checks add, run and renew: one NAME, then optionally -- and
+// beforeDash is how many arguments come before --.
+func beforeDash(cmd *cobra.Command, args []string) int {
+	if dash := cmd.ArgsLenAtDash(); dash != -1 {
+		return dash
+	}
+	return len(args)
+}
+
+// nameThenOpts checks add and renew: one NAME, then optionally -- and
 // options for claude. add takes them only with --sign-in.
 func (c *cli) nameThenOpts(cmd *cobra.Command, args []string) error {
-	dash := cmd.ArgsLenAtDash()
-	if dash == -1 {
-		dash = len(args)
-	}
+	dash := beforeDash(cmd, args)
 
 	// The arguments are not echoed: a token pasted by mistake would land in
 	// the terminal's scrollback.
@@ -227,12 +232,7 @@ func (c *cli) nameThenOpts(cmd *cobra.Command, args []string) error {
 // optionalNameThenOpts checks run: at most a NAME, then optionally -- and
 // options for claude.
 func (c *cli) optionalNameThenOpts(cmd *cobra.Command, args []string) error {
-	dash := cmd.ArgsLenAtDash()
-	if dash == -1 {
-		dash = len(args)
-	}
-
-	if dash > 1 {
+	if dash := beforeDash(cmd, args); dash > 1 {
 		return fmt.Errorf("%s takes at most one NAME before --, not %d arguments", cmd.Name(), dash)
 	}
 	return nil
@@ -241,10 +241,7 @@ func (c *cli) optionalNameThenOpts(cmd *cobra.Command, args []string) error {
 // splitDash splits the arguments of run into the NAME ("" for none) and
 // the arguments for claude after --.
 func splitDash(cmd *cobra.Command, args []string) (string, []string) {
-	dash := cmd.ArgsLenAtDash()
-	if dash == -1 {
-		dash = len(args)
-	}
+	dash := beforeDash(cmd, args)
 
 	name := ""
 	if dash == 1 {

@@ -42,7 +42,7 @@ func TestUpdateRoundTrip(t *testing.T) {
 		t.Errorf("state.json mode = %v; want 0600", fi.Mode().Perm())
 	}
 
-	leftovers, _ := filepath.Glob(filepath.Join(s.Root, ".state-*"))
+	leftovers, _ := filepath.Glob(filepath.Join(s.Root, ".state.json-*"))
 	if len(leftovers) != 0 {
 		t.Errorf("temporary files left: %v", leftovers)
 	}

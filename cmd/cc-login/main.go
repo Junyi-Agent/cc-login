@@ -23,7 +23,7 @@ type cli struct {
 	app      *app.App
 	out, err io.Writer
 	root     *cobra.Command
-	ran      bool // the command line passed the checks and the command ran
+	ran      bool // the command line passed cobra's checks: set in PersistentPreRunE
 
 	// exec replaces this process with a program; tests replace it.
 	exec func(path string, argv, env []string) error

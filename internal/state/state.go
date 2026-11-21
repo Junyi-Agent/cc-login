@@ -155,21 +155,25 @@ func (s *Store) lock() (func(), error) {
 	return func() { _ = f.Close() }, nil // closing releases the lock
 }
 
-// save writes st to a temporary file in the root and renames it over
-// state.json, so a reader sees the old or the new state, never a part.
+// save writes st to state.json.
 func (s *Store) save(st *State) error {
 	b, err := json.MarshalIndent(st, "", "  ")
 	if err != nil {
 		return err
 	}
+	return WriteAtomic(s.path(), append(b, '\n'))
+}
 
-	tmp, err := os.CreateTemp(s.Root, ".state-*.json") // 0600
+// WriteAtomic writes data to a 0600 temporary file next to path and renames
+// it over path, so a reader sees the old or the new content, never a part.
+func WriteAtomic(path string, data []byte) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+"-*") // 0600
 	if err != nil {
 		return err
 	}
 	defer func() { _ = os.Remove(tmp.Name()) }() // fails harmlessly after the rename
 
-	if _, err := tmp.Write(append(b, '\n')); err != nil {
+	if _, err := tmp.Write(data); err != nil {
 		_ = tmp.Close()
 		return err
 	}
@@ -181,7 +185,7 @@ func (s *Store) save(st *State) error {
 		return err
 	}
 
-	return os.Rename(tmp.Name(), s.path())
+	return os.Rename(tmp.Name(), path)
 }
 
 // nameRE is the form of a login name.

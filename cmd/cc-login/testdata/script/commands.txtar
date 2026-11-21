@@ -22,6 +22,7 @@ stdout 'dir t1'
 
 ! exec cc-login use off
 stderr 'login off is signed out'
+! stderr 'for usage'
 
 # rename keeps the credentials directory, so the login stays signed in.
 exec cc-login rename work home

@@ -10,6 +10,10 @@ stderr 'did you mean list\?'
 stderr 'accepts 1 arg\(s\), received 0'
 stderr 'Run ''cc-login use --help'' for usage.'
 
+! exec cc-login add x --sign-in --api-key
+stderr 'none of the others can be'
+stderr 'Run ''cc-login add --help'' for usage.'
+
 # The arguments are not echoed: a token pasted in the wrong place stays out
 # of the terminal.
 ! exec cc-login add work sk-ant-oat01-pasted
