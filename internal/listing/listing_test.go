@@ -36,6 +36,7 @@ func TestRecordFields(t *testing.T) {
 		{map[string]any{"authMethod": "api_key"}, "API key ?", "api"},
 		{map[string]any{"email": nil}, "-", "-"},
 	}
+
 	for _, c := range cases {
 		e, p := recordFields(c.rec)
 		if e != c.email || p != c.plan {
@@ -60,10 +61,12 @@ func TestRender(t *testing.T) {
 		{Name: "old", Email: "o@x", Plan: "pro", Expiry: n - 3*86400},
 		{Name: "out", Email: "-", Plan: "-"},
 	}
+
 	var b strings.Builder
 	if err := Render(&b, logins, "work", now, Style{}); err != nil {
 		t.Fatal(err)
 	}
+
 	want := `  NAME      ACCOUNT         PLAN  5H LEFT    WEEK LEFT    STATUS      EXPIRES
   console   API key …wxyz   api   -          -          ● signed in   never
   personal  me@example.com  max   ?          ?          ● signed in   in 28d   12-18 12:00
@@ -83,10 +86,12 @@ func TestRender(t *testing.T) {
 
 func TestRenderNarrow(t *testing.T) {
 	logins := []Login{{Name: "a", Email: "someone.with.a.long.address@example.com", Plan: "max", SignedIn: true, Expiry: now.Unix() + 86400*30}}
+
 	var b strings.Builder
 	if err := Render(&b, logins, "", now, Style{Color: true, Cols: 70}); err != nil {
 		t.Fatal(err)
 	}
+
 	out := b.String()
 	if strings.Contains(out, "12-20 12:00") {
 		t.Error("too wide: the date and time should go first")
@@ -103,6 +108,7 @@ func TestRenderNarrow(t *testing.T) {
 // tok (a token login), each with a record.
 func fakeStore(t *testing.T) *store.Store {
 	root := t.TempDir()
+
 	for name, file := range map[string]string{"sign": "", "key": "api-key", "tok": "oauth-token"} {
 		dir := filepath.Join(root, ".dirs", strings.ToUpper(name))
 		if err := os.MkdirAll(dir, 0o700); err != nil {
@@ -117,20 +123,23 @@ func fakeStore(t *testing.T) *store.Store {
 			}
 		}
 	}
-	if err := os.WriteFile(filepath.Join(root, "sign.json"), []byte(`{"email":"s@x","subscriptionType":"max"}`), 0o600); err != nil {
-		t.Fatal(err)
+
+	for name, rec := range map[string]string{
+		"sign": `{"email":"s@x","subscriptionType":"max"}`,
+		"key":  `{"authMethod":"api_key","apiKeyHint":"…cret"}`,
+		"tok":  `{"email":"t@x","loginExpiresAt":"2027-11-20T12:00:00Z"}`,
+	} {
+		if err := os.WriteFile(filepath.Join(root, name+".json"), []byte(rec), 0o600); err != nil {
+			t.Fatal(err)
+		}
 	}
-	if err := os.WriteFile(filepath.Join(root, "key.json"), []byte(`{"authMethod":"api_key","apiKeyHint":"…cret"}`), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(root, "tok.json"), []byte(`{"email":"t@x","loginExpiresAt":"2027-11-20T12:00:00Z"}`), 0o600); err != nil {
-		t.Fatal(err)
-	}
+
 	return &store.Store{Root: root}
 }
 
 func TestProber(t *testing.T) {
 	s := fakeStore(t)
+
 	var mu sync.Mutex // AuthStatus runs in one goroutine per login
 	envs := map[string][]string{}
 	p := &Prober{
@@ -158,6 +167,7 @@ func TestProber(t *testing.T) {
 			return quota.Quota{FiveHour: quota.Window{Used: ip(10)}}, nil
 		},
 	}
+
 	ls := p.All(context.Background(), s.Names())
 	got := map[string]Login{}
 	for _, l := range ls {
@@ -184,6 +194,7 @@ func TestProber(t *testing.T) {
 		}
 		return false
 	}
+
 	if !has(envs["KEY"], "ANTHROPIC_API_KEY") || has(envs["KEY"], "CLAUDE_CODE_OAUTH_TOKEN") {
 		t.Error("key: want ANTHROPIC_API_KEY only")
 	}
@@ -197,6 +208,7 @@ func TestProber(t *testing.T) {
 
 func TestProberDropsInheritedKey(t *testing.T) {
 	s := fakeStore(t)
+
 	var seen []string
 	p := &Prober{
 		Store: s, Now: now, Env: []string{"ANTHROPIC_API_KEY=default-key", "PATH=/bin"},
@@ -204,6 +216,7 @@ func TestProberDropsInheritedKey(t *testing.T) {
 		AccessToken: func(context.Context, string, time.Time) (string, creds.Result) { return "", creds.None },
 	}
 	p.One(context.Background(), "sign")
+
 	for _, kv := range seen {
 		if strings.HasPrefix(kv, "ANTHROPIC_API_KEY=") {
 			t.Fatal("the default login's key leaked into another login")

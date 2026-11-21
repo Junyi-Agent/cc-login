@@ -19,16 +19,20 @@ func layout(t *testing.T) *Store {
 			t.Fatal(err)
 		}
 	}
+
 	for _, d := range []string{".dirs/AAA", ".dirs/BBB", "old"} {
 		must(os.MkdirAll(filepath.Join(root, d), 0o700))
 	}
+
 	must(os.Symlink(".dirs/AAA", filepath.Join(root, "a")))
 	must(os.Symlink(".dirs/BBB", filepath.Join(root, "b")))
 	must(os.Symlink(".dirs/NOPE", filepath.Join(root, "gone")))
+
 	must(os.WriteFile(filepath.Join(root, ".dirs/BBB/api-key"), []byte("sk-ant-x\n"), 0o600))
 	must(os.WriteFile(filepath.Join(root, "a.json"), []byte(`{"email":"a@x"}`), 0o600))
 	must(os.WriteFile(filepath.Join(root, "current"), []byte("a\n"), 0o600))
 	must(os.WriteFile(filepath.Join(root, ".pending"), []byte("CCC\n"), 0o600))
+
 	return &Store{Root: root}
 }
 
@@ -51,6 +55,7 @@ func TestDir(t *testing.T) {
 		"a/b":     "",
 		"a.json":  "",
 	}
+
 	for name, want := range cases {
 		got, ok := s.Dir(name)
 		if ok != (want != "") || got != want {
@@ -67,6 +72,7 @@ func TestDirRebuildsPathFromID(t *testing.T) {
 	if err := os.Symlink(filepath.Join(s.Root, ".dirs", "AAA"), abs); err != nil {
 		t.Fatal(err)
 	}
+
 	if got, _ := s.Dir("abs"); got != filepath.Join(s.Root, ".dirs", "AAA") {
 		t.Fatalf("Dir(abs) = %q", got)
 	}
@@ -77,12 +83,14 @@ func TestDefault(t *testing.T) {
 	if name, ok := s.Default(); !ok || name != "a" {
 		t.Fatalf("Default = %q, %v", name, ok)
 	}
+
 	if err := os.WriteFile(filepath.Join(s.Root, "current"), nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if _, ok := s.Default(); ok {
 		t.Fatal("empty current: want no default")
 	}
+
 	if err := os.WriteFile(filepath.Join(s.Root, "current"), []byte("gone"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -98,6 +106,7 @@ func TestDirKind(t *testing.T) {
 	if DirKind(a) != KindSignIn || DirKind(b) != KindKey {
 		t.Fatalf("kinds: a=%v b=%v", DirKind(a), DirKind(b))
 	}
+
 	if err := os.WriteFile(filepath.Join(a, "oauth-token"), []byte("sk-ant-oat-x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -112,6 +121,7 @@ func TestRecord(t *testing.T) {
 	if err != nil || rec["email"] != "a@x" {
 		t.Fatalf("Record = %v, %v", rec, err)
 	}
+
 	if _, err := s.Record("b"); err == nil {
 		t.Fatal("b has no record")
 	}

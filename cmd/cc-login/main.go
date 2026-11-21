@@ -4,132 +4,120 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
 	"github.com/Junyi-Agent/cc-login/internal/listing"
 	"github.com/Junyi-Agent/cc-login/internal/store"
 )
 
-var cmds = []string{"list", "use", "add", "run", "renew", "rename", "remove", "help"}
+// app is one run of cc-login: where it writes and which data directory it
+// reads.
+type app struct {
+	out, err io.Writer
+	store    *store.Store
+	root     *cobra.Command
+	ran      bool // the command line passed the checks and the command ran
+}
 
-// ported are the commands this binary implements so far; the others still
-// run in cc-login.zsh.
-var ported = map[string]bool{"list": true, "help": true}
-
-func errf(format string, a ...any) {
-	fmt.Fprintf(os.Stderr, "cc-login: "+format+"\n", a...)
+func (a *app) errf(format string, args ...any) {
+	_, _ = fmt.Fprintf(a.err, "cc-login: "+format+"\n", args...)
 }
 
 func main() {
-	os.Exit(run(os.Args[1:]))
+	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
 }
 
-func run(args []string) int {
-	cmd := "list"
-	if len(args) > 0 {
-		cmd, args = args[0], args[1:]
+func run(args []string, stdout, stderr io.Writer) int {
+	a := &app{out: stdout, err: stderr, store: store.New()}
+	a.root = a.command()
+
+	// cobra reads os.Args when the args are nil.
+	if args == nil {
+		args = []string{}
 	}
-	switch {
-	case cmd == "help" || cmd == "-h" || cmd == "--help":
-		fmt.Println("usage: cc-login COMMAND [ARGS]")
-		fmt.Println()
-		fmt.Println("cc-login list [--json]            list the logins; ▸ marks the default, the one new claude launches use.")
-		fmt.Println("                                  cc-login without a command does the same. --json prints a JSON array")
-		fmt.Println()
-		fmt.Printf("only %s are ported to Go so far; the other commands run in cc-login.zsh\n", "list and help")
+	a.root.SetArgs(args)
+
+	c, err := a.root.ExecuteC()
+	if err == nil {
 		return 0
-	case strings.HasPrefix(cmd, "-"):
-		errf("unknown option %s; see cc-login help", cmd)
-		return 1
-	case !contains(cmds, cmd):
-		errf("unknown command %s; the commands: %s", cmd, strings.Join(cmds, " "))
-		return 1
-	case !ported[cmd]:
-		errf("%s is not ported to Go yet; run it with the zsh cc-login", cmd)
-		return 1
-	}
-	asJSON := false
-	for _, a := range args {
-		if a == "--json" {
-			asJSON = true
-			continue
-		}
-		errf("list takes only --json, not %s", a)
-		return 1
 	}
 
-	s := store.New()
-	if !checkSetUp(s) {
-		return 1
+	// A wrong command line also points to the help of the command.
+	a.errf("%v", err)
+	if !a.ran {
+		_, _ = fmt.Fprintf(a.err, "Run '%s --help' for usage.\n", c.CommandPath())
 	}
-	return list(s, asJSON)
-}
-
-func contains(xs []string, x string) bool {
-	for _, v := range xs {
-		if v == x {
-			return true
-		}
-	}
-	return false
+	return 1
 }
 
 // checkSetUp is the read-only part of _cc_login_check: setting cc-login up
 // and adopting stray credentials ask questions and move files, which the zsh
 // version still does.
-func checkSetUp(s *store.Store) bool {
+func (a *app) checkSetUp() error {
+	s := a.store
 	if !s.SetUp() {
-		errf("cc-login is not set up on this machine; set it up with the zsh cc-login")
-		return false
+		return errors.New("cc-login is not set up on this machine; set it up with the zsh cc-login")
 	}
+
+	// CLAUDE_CONFIG_DIR is the user's own setting; cc-login reads it as Claude Code does.
 	cfg := os.Getenv("CLAUDE_CONFIG_DIR")
 	if cfg == "" {
 		home, _ := os.UserHomeDir()
 		cfg = filepath.Join(home, ".claude")
 	}
-	// CLAUDE_CONFIG_DIR is the user's own setting; cc-login reads it as Claude Code does.
-	if fi, err := os.Stat(filepath.Join(cfg, ".credentials.json")); err == nil && fi.Mode().IsRegular() { //nolint:gosec // G703: see above
-		errf("%s holds a login that a claude run without cc-login wrote; move it into a login with the zsh cc-login", filepath.Join(cfg, ".credentials.json"))
+	stray := filepath.Join(cfg, ".credentials.json")
+	if fi, err := os.Stat(stray); err == nil && fi.Mode().IsRegular() { //nolint:gosec // G703: see above
+		a.errf("%s holds a login that a claude run without cc-login wrote; move it into a login with the zsh cc-login", stray)
 	}
-	if id, err := store.ReadTrimmed(filepath.Join(s.Root, ".pending")); err == nil && id != "" && !strings.Contains(id, "/") {
+
+	id, err := store.ReadTrimmed(filepath.Join(s.Root, ".pending"))
+	if err == nil && id != "" && !strings.Contains(id, "/") {
 		if _, err := os.Stat(filepath.Join(s.Root, ".dirs", id, ".credentials.json")); err == nil {
-			errf("a claude signed in while no login was the default; name that login with the zsh cc-login")
+			a.errf("a claude signed in while no login was the default; name that login with the zsh cc-login")
 		}
 	}
-	return true
+
+	return nil
 }
 
-func list(s *store.Store, asJSON bool) int {
-	names := s.Names()
+// list prints the logins as a table, or as JSON.
+func (a *app) list(asJSON bool) error {
+	if err := a.checkSetUp(); err != nil {
+		return err
+	}
+
+	s := a.store
 	p := listing.NewProber(s)
-	logins := p.All(context.Background(), names)
+	logins := p.All(context.Background(), s.Names())
 	current, _ := s.Default()
 
 	if asJSON {
-		if err := listing.RenderJSON(os.Stdout, logins, current, p.Now); err != nil {
-			errf("could not write the JSON: %v", err)
-			return 1
+		if err := listing.RenderJSON(a.out, logins, current, p.Now); err != nil {
+			return fmt.Errorf("could not write the JSON: %w", err)
 		}
-		return 0
+		return nil
 	}
 
+	// Colors and the width only on a terminal.
 	st := listing.Style{}
-	fd := int(os.Stdout.Fd())
-	if term.IsTerminal(fd) && os.Getenv("NO_COLOR") == "" {
+	if f, ok := a.out.(*os.File); ok && term.IsTerminal(int(f.Fd())) && os.Getenv("NO_COLOR") == "" {
 		st.Color = true
 		st.Theme = listing.Theme()
-		if w, _, err := term.GetSize(fd); err == nil {
+		if w, _, err := term.GetSize(int(f.Fd())); err == nil {
 			st.Cols = w
 		}
 	}
-	if err := listing.Render(os.Stdout, logins, current, p.Now, st); err != nil {
-		errf("could not write the list: %v", err)
-		return 1
+
+	if err := listing.Render(a.out, logins, current, p.Now, st); err != nil {
+		return fmt.Errorf("could not write the list: %w", err)
 	}
-	return 0
+	return nil
 }

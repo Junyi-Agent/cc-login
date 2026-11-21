@@ -18,6 +18,7 @@ func Status(l Login, now time.Time) (state, tone string) {
 	} else {
 		state, tone = "signed out", "out"
 	}
+
 	if l.Expiry != 0 {
 		left := l.Expiry - now.Unix()
 		switch {
@@ -27,6 +28,7 @@ func Status(l Login, now time.Time) (state, tone string) {
 			tone = "warn"
 		}
 	}
+
 	return state, tone
 }
 
@@ -56,6 +58,7 @@ func timePtr(sec int64) *time.Time {
 	if sec == 0 {
 		return nil
 	}
+
 	t := time.Unix(sec, 0).UTC()
 	return &t
 }
@@ -64,6 +67,7 @@ func strPtr(s string) *string {
 	if s == "-" || s == "" {
 		return nil
 	}
+
 	return &s
 }
 
@@ -71,10 +75,12 @@ func jsonWindow(used *int, reset int64) *JSONWindow {
 	if used == nil {
 		return nil
 	}
+
 	left := 100 - *used
 	if *used >= 100 {
 		left = 0
 	}
+
 	return &JSONWindow{LeftPercent: left, ResetsAt: timePtr(reset)}
 }
 
@@ -83,31 +89,39 @@ func jsonWindow(used *int, reset int64) *JSONWindow {
 func ToJSON(logins []Login, current string, now time.Time) []JSONLogin {
 	out := make([]JSONLogin, 0, len(logins))
 	for _, l := range logins {
-		state, tone := Status(l, now)
-		j := JSONLogin{
-			Name: l.Name, Default: l.Name == current,
-			Account: strPtr(l.Email), Plan: strPtr(l.Plan),
-			Kind: "sign-in", Status: state, Expires: timePtr(l.Expiry),
-		}
-		switch {
-		case l.Token:
-			j.Kind = "token"
-		case l.Key:
-			j.Kind = "api-key"
-		}
-		if l.QuotaOK && tone != "out" && tone != "bad" {
-			j.FiveHour = jsonWindow(l.Quota.FiveHour.Used, l.Quota.FiveHour.Reset)
-			j.SevenDay = jsonWindow(l.Quota.SevenDay.Used, l.Quota.SevenDay.Reset)
-			src := "live"
-			if l.Cached {
-				src = "cache"
-				j.CachedAt = timePtr(l.CachedAt)
-			}
-			j.QuotaSource = &src
-		}
-		out = append(out, j)
+		out = append(out, toJSON(l, l.Name == current, now))
 	}
 	return out
+}
+
+// toJSON converts one login; isDefault says whether it is the default.
+func toJSON(l Login, isDefault bool, now time.Time) JSONLogin {
+	state, tone := Status(l, now)
+	j := JSONLogin{
+		Name: l.Name, Default: isDefault,
+		Account: strPtr(l.Email), Plan: strPtr(l.Plan),
+		Kind: "sign-in", Status: state, Expires: timePtr(l.Expiry),
+	}
+
+	switch {
+	case l.Token:
+		j.Kind = "token"
+	case l.Key:
+		j.Kind = "api-key"
+	}
+
+	if l.QuotaOK && tone != "out" && tone != "bad" {
+		j.FiveHour = jsonWindow(l.Quota.FiveHour.Used, l.Quota.FiveHour.Reset)
+		j.SevenDay = jsonWindow(l.Quota.SevenDay.Used, l.Quota.SevenDay.Reset)
+		src := "live"
+		if l.Cached {
+			src = "cache"
+			j.CachedAt = timePtr(l.CachedAt)
+		}
+		j.QuotaSource = &src
+	}
+
+	return j
 }
 
 // RenderJSON writes `list --json`: one JSON array, indented.

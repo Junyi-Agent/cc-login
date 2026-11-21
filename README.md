@@ -15,10 +15,11 @@ directory as the zsh version (`$XDG_DATA_HOME/claude-logins`, or
 |---|---|
 | `list` | ported; output matches the zsh version byte for byte, with and without color, at several terminal widths |
 | `list --json` | new in Go: a JSON array, one object per login (see below) |
-| `help` | stub: lists only the ported commands |
-| `use` `add` `run` `renew` `rename` `remove` | not ported: the binary says to use the zsh version |
+| help, argument checks | cobra: `cc-login --help`, `cc-login COMMAND --help`, cobra's error messages; not the zsh version's wording. Options may come anywhere (`add --api-key NAME`); options for claude go after `--` |
+| `completion` | new in Go: cobra's completion scripts (zsh, bash, fish, powershell): commands, options, login names |
+| `use` `add` `run` `renew` `rename` `remove` | not ported: cobra checks the arguments, then the binary says to use the zsh version |
 | set-up, adopting `~/.claude/.credentials.json` and `.pending` | not ported: `list` only warns |
-| zsh shim (preexec export, zstyle → env, completion) | not written: [ADR 0004](docs/adr/0004-zsh-shim-exports-env.md), [ADR 0005](docs/adr/0005-zstyle-to-env.md) |
+| zsh shim (preexec export, zstyle → env) | not written: [ADR 0004](docs/adr/0004-zsh-shim-exports-env.md), [ADR 0005](docs/adr/0005-zstyle-to-env.md) |
 
 `list` runs `claude auth status` and the quota request for every login in
 parallel: about 0.3 s for 8 logins, against about 2 s in zsh.
@@ -63,6 +64,13 @@ go install github.com/Junyi-Agent/cc-login/cmd/cc-login@latest
 
 Releases (`v*` tags) also publish darwin and linux binaries.
 
+Completion, in `~/.zshrc` after `compinit` and after sourcing `cc-login.zsh`
+(the one loaded last completes `cc-login`):
+
+```sh
+source <(cc-login completion zsh)
+```
+
 ## Development
 
 ```sh
@@ -90,17 +98,17 @@ Workflow rules (worktrees, the pre-push review gate, ADRs) are in
 | Package | What it does | zsh counterpart |
 |---|---|---|
 | `internal/store` | data directory: names, links, `current`, records, login kind | `_cc_login_dir`, `_cc_login_names`, `_cc_login_default` |
-| `internal/claude` | env for one login, `claude auth status` | `_cc_login_with`, `_cc_login_stored` |
+| `internal/claude` | env for one login, `claude auth status` | `_cc_login_with` |
 | `internal/creds` | access token from `.credentials.json` or the Keychain | `_cc_login_token` |
 | `internal/quota` | `api/oauth/usage` and the quota cache | `_cc_login_quota`, `_cc_login_cached_quota` |
 | `internal/listing` | gather in parallel, format, render, JSON | `_cc_login_state`, `_cc_login_list` |
-| `cmd/cc-login` | argument parsing | `cc-login()` |
+| `cmd/cc-login` | commands, options and argument checks (cobra), completion | `cc-login()`, `_cc_login_usage`, `_cc_login_complete` |
 
 ## Plan
 
 1. ~~`list`~~, ~~`list --json`~~
-2. move argument parsing to cobra, keeping the zsh version's messages and exit
-   codes; `cc-login completion zsh` ([ADR 0006](docs/adr/0006-cobra-and-bubbletea.md))
+2. ~~cobra: help, argument checks and completion~~
+   ([ADR 0006](docs/adr/0006-cobra-and-bubbletea.md))
 3. `use`, `run` (`syscall.Exec` into claude), `rename`, `remove`, and the
    check / adopt flow, with `--yes` and a non-terminal failure instead of a
    prompt, tested on a temporary data directory

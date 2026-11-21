@@ -48,6 +48,7 @@ func roundPtr(f *float64) *int {
 	if f == nil {
 		return nil
 	}
+
 	n := int(math.Round(*f))
 	return &n
 }
@@ -56,6 +57,7 @@ func (w *usageWindow) window() (Window, error) {
 	if w == nil {
 		return Window{}, nil
 	}
+
 	out := Window{Used: roundPtr(w.Utilization)}
 	if w.ResetsAt != nil {
 		t, err := time.Parse(time.RFC3339Nano, *w.ResetsAt)
@@ -64,6 +66,7 @@ func (w *usageWindow) window() (Window, error) {
 		}
 		out.Reset = t.Unix()
 	}
+
 	return out, nil
 }
 
@@ -71,12 +74,14 @@ func (w *usageWindow) window() (Window, error) {
 func Fetch(ctx context.Context, client *http.Client, tok string) (Quota, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, UsageURL, nil)
 	if err != nil {
 		return Quota{}, err
 	}
 	req.Header.Set("Authorization", "Bearer "+tok)
 	req.Header.Set("anthropic-beta", "oauth-2025-04-20")
+
 	resp, err := client.Do(req)
 	if err != nil {
 		return Quota{}, err
@@ -85,10 +90,12 @@ func Fetch(ctx context.Context, client *http.Client, tok string) (Quota, error) 
 	if resp.StatusCode >= 400 {
 		return Quota{}, fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
+
 	var u usageResponse
 	if err = json.NewDecoder(resp.Body).Decode(&u); err != nil {
 		return Quota{}, err
 	}
+
 	var q Quota
 	if q.FiveHour, err = u.FiveHour.window(); err != nil {
 		return Quota{}, err
@@ -96,6 +103,7 @@ func Fetch(ctx context.Context, client *http.Client, tok string) (Quota, error) 
 	if q.SevenDay, err = u.SevenDay.window(); err != nil {
 		return Quota{}, err
 	}
+
 	return q, nil
 }
 
@@ -109,6 +117,7 @@ func CachePath() string {
 		}
 		return p
 	}
+
 	return filepath.Join(home, ".claude", "quota-last.json")
 }
 
@@ -129,6 +138,7 @@ func (w *CacheWindow) window(now int64) Window {
 	if w == nil || w.UsedPercentage == nil {
 		return Window{}
 	}
+
 	reset := now
 	if w.ResetsAt != nil {
 		reset = int64(*w.ResetsAt)
@@ -136,10 +146,12 @@ func (w *CacheWindow) window(now int64) Window {
 	if reset < now {
 		return Window{} // it has reset since
 	}
+
 	out := Window{Used: roundPtr(w.UsedPercentage)}
 	if w.ResetsAt != nil {
 		out.Reset = int64(*w.ResetsAt)
 	}
+
 	return out
 }
 
@@ -153,25 +165,31 @@ func Cached(path, id string, now time.Time) (q Quota, at int64, err error) {
 	if err != nil {
 		return Quota{}, 0, err
 	}
+
 	var cache map[string]json.RawMessage
 	if err := json.Unmarshal(b, &cache); err != nil {
 		return Quota{}, 0, err
 	}
+
 	raw, ok := cache["dir:"+id]
 	if !ok {
 		return Quota{}, 0, ErrNoCache
 	}
+
 	var e CacheEntry
 	if err := json.Unmarshal(raw, &e); err != nil {
 		return Quota{}, 0, err
 	}
+
 	n := now.Unix()
 	q = Quota{FiveHour: e.FiveHour.window(n), SevenDay: e.SevenDay.window(n)}
 	if !q.Any() {
 		return Quota{}, 0, ErrNoCache
 	}
+
 	if e.At != nil {
 		at = int64(*e.At)
 	}
+
 	return q, at, nil
 }

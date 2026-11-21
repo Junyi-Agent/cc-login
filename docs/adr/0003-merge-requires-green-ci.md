@@ -10,12 +10,12 @@ CI 在 Ubuntu 和 macOS 上跑 lint 和测试（macOS 才走 Keychain 代码）�
 
 - `.github/workflows/ci.yml` 在 `pull_request` 和推送到 `main` 时跑 `pre-commit run --all-files`，矩阵为 `ubuntu-latest`、`macos-latest`。
 - agent 合并 PR 只能用 `gh pr merge`：`git_guard.py` 先跑 `gh pr checks`，没全过就拒绝；直接调合并 API（`gh api .../pulls/N/merge`）也拒绝。
-- GitHub 上给 `main` 开分支保护，要求 `ci` 的两个 job 通过才能合并，并禁止直接 push。远端有 `main` 之后由仓库管理员设置。
+- GitHub 上给 `main` 开分支保护：要求 `pre-commit (ubuntu-latest)`、`pre-commit (macos-latest)` 两个检查通过、分支与 `main` 同步（strict），必须经 PR 合并，线性历史，禁止 force push 和删除，管理员也受限制（enforce admins）。仓库只允许 squash 合并，合并后删除分支。2026-11-21 已设置。
 - 打 `v*` tag 时 `.github/workflows/release.yml` 用 goreleaser 发布 darwin/linux 的 amd64/arm64 二进制。
 
 ## 后果
 
-- 分支保护设置之前，人仍能在网页上合并红色 PR 或直接 push `main`。
+- 人也不能直接 push `main` 或合并红色 PR；紧急情况要先在仓库设置里关掉保护。
 - release workflow 在第一次打 tag 之前没跑过。
 
 ## 验证

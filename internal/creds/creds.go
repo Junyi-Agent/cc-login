@@ -36,10 +36,12 @@ var ReadKeychain = func(ctx context.Context, service string) ([]byte, bool) {
 	if runtime.GOOS != "darwin" {
 		return nil, false
 	}
+
 	out, err := exec.CommandContext(ctx, "security", "find-generic-password", "-s", service, "-w").Output()
 	if err != nil {
 		return nil, false
 	}
+
 	return out, true
 }
 
@@ -64,6 +66,8 @@ func AccessToken(ctx context.Context, dir string, now time.Time) (string, Result
 	if b, ok := ReadKeychain(ctx, KeychainService(dir)); ok {
 		blobs = append(blobs, b)
 	}
+
+	// The token that expires last.
 	var best string
 	var bestExp int64
 	for _, b := range blobs {
@@ -76,6 +80,7 @@ func AccessToken(ctx context.Context, dir string, now time.Time) (string, Result
 			best, bestExp = c.ClaudeAiOauth.AccessToken, exp
 		}
 	}
+
 	if best == "" {
 		return "", None
 	}

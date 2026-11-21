@@ -22,6 +22,7 @@ func TestStatus(t *testing.T) {
 		{Login{}, "signed out", "out"},
 		{Login{Expiry: n - 1}, "expired", "bad"},
 	}
+
 	for _, c := range cases {
 		if s, tone := Status(c.l, now); s != c.state || tone != c.tone {
 			t.Errorf("Status(%+v) = %q %q, want %q %q", c.l, s, tone, c.state, c.tone)
@@ -39,10 +40,12 @@ func TestRenderJSON(t *testing.T) {
 		{Name: "key", Email: "API key …wxyz", Plan: "api", SignedIn: true, Key: true},
 		{Name: "old", Email: "o@x", Plan: "pro", Expiry: n - 1, QuotaOK: true, Quota: quota.Quota{FiveHour: quota.Window{Used: ip(1)}}},
 	}
+
 	var b strings.Builder
 	if err := RenderJSON(&b, logins, "work", now); err != nil {
 		t.Fatal(err)
 	}
+
 	var got []map[string]any
 	if err := json.Unmarshal([]byte(b.String()), &got); err != nil {
 		t.Fatalf("not JSON: %v\n%s", err, b.String())
