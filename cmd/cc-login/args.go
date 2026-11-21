@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -60,4 +61,22 @@ func (c *cli) completeName(_ *cobra.Command, args []string, _ string) ([]cobra.C
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 	return c.app.Names(), cobra.ShellCompDirectiveNoFileComp
+}
+
+// flagError adds to an unknown option of run, add or renew that options for
+// claude go after --.
+func flagError(cmd *cobra.Command, err error) error {
+	if !strings.HasPrefix(err.Error(), "unknown") { // unknown flag, unknown shorthand flag
+		return err
+	}
+
+	switch cmd.Name() {
+	case "run":
+		return fmt.Errorf("%w; options for claude go after --: cc-login run [NAME] -- OPTS", err)
+	case "renew":
+		return fmt.Errorf("%w; options for claude auth login go after --: cc-login renew NAME -- OPTS", err)
+	case "add":
+		return fmt.Errorf("%w; options for claude auth login go after --sign-in --: cc-login add NAME --sign-in -- OPTS", err)
+	}
+	return err
 }

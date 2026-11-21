@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -127,6 +128,58 @@ func TestAddUnchecked(t *testing.T) {
 	}
 	if len(p.notes) != 1 || !strings.Contains(p.notes[0], "no response") {
 		t.Errorf("notes = %q", p.notes)
+	}
+}
+
+// At a terminal, add runs claude setup-token in the new login's directory,
+// with no credentials of the shell, then reads the pasted token. A failed
+// claude still lets a token be pasted; Ctrl-C saves nothing. Without a
+// terminal claude setup-token does not run.
+func TestAddTokenRunsSetupToken(t *testing.T) {
+	cases := []struct {
+		name     string
+		terminal bool
+		setupErr error
+		wantRun  bool
+		wantErr  string
+		wantNote string
+	}{
+		{"at a terminal", true, nil, true, "", "Running claude setup-token"},
+		{"claude fails", true, errors.New("exit status 1"), true, "", "run it in another terminal"},
+		{"Ctrl-C", true, claude.ErrStopped, true, "claude setup-token: stopped", ""},
+		{"no terminal", false, nil, false, "", "run in a terminal"},
+	}
+
+	for _, tc := range cases {
+		var ran bool
+		var env []string
+		f := &fake{status: map[string]claude.AuthInfo{}, setup: func(e []string) error {
+			ran, env = true, e
+			return tc.setupErr
+		}}
+		a := addApp(t, map[string]*state.Login{}, "", f)
+		p := &prompts{secrets: []string{goodToken}, terminal: tc.terminal}
+
+		_, err := a.Add(context.Background(), "ci", state.Token, nil, p)
+
+		switch {
+		case tc.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErr)):
+			t.Errorf("%s: %v; want %q", tc.name, err, tc.wantErr)
+		case tc.wantErr == "" && err != nil:
+			t.Errorf("%s: %v", tc.name, err)
+		}
+		if ran != tc.wantRun {
+			t.Errorf("%s: setup-token ran %t; want %t", tc.name, ran, tc.wantRun)
+		}
+		if ran && (lookup(env, "ANTHROPIC_API_KEY") != "" || lookup(env, "CLAUDE_SECURESTORAGE_CONFIG_DIR") == "") {
+			t.Errorf("%s: setup-token env %q; want the login's directory and no key", tc.name, env)
+		}
+		if tc.wantNote != "" && !strings.Contains(strings.Join(p.notes, "\n"), tc.wantNote) {
+			t.Errorf("%s: notes %q; want %q", tc.name, p.notes, tc.wantNote)
+		}
+		if logins := len(load(t, a).Logins); (tc.wantErr == "") != (logins == 1) {
+			t.Errorf("%s: %d logins saved", tc.name, logins)
+		}
 	}
 }
 

@@ -31,6 +31,7 @@ the one new claude launches use. Without a command it lists the logins.
 	}
 	root.SetOut(c.out)
 	root.SetErr(c.err)
+	root.SetFlagErrorFunc(flagError)
 
 	// cc-login --version, and the debug log for every command.
 	root.Version = versionString()

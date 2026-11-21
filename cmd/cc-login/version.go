@@ -10,11 +10,37 @@ import (
 func (c *cli) versionCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "version",
-		Short: "Print the version of cc-login",
-		Args:  cobra.NoArgs,
-		RunE: func(*cobra.Command, []string) error {
-			return c.say("cc-login %s (%s)", versionString(), goVersion())
-		},
+		Short: "Print the version of cc-login, and how claude starts",
+		Long: `Print the version of cc-login, the claude it runs, and whether a plain claude
+goes through cc-login: whether the claude link is in place.`,
+		Args: cobra.NoArgs,
+		RunE: func(*cobra.Command, []string) error { return c.version() },
+	}
+}
+
+// version prints the version of cc-login, the claude it runs, and what a
+// plain claude runs: whether the claude link is in place.
+func (c *cli) version() error {
+	if err := c.say("cc-login %s (%s)", versionString(), goVersion()); err != nil {
+		return err
+	}
+
+	s := c.app.Setup()
+	claudeLine := "claude: " + s.Claude
+	if s.ClaudeErr != nil {
+		claudeLine = "claude: " + s.ClaudeErr.Error()
+	}
+	if err := c.say("%s", claudeLine); err != nil {
+		return err
+	}
+
+	switch {
+	case s.Linked:
+		return c.say("claude link: %s; a plain claude runs with the default login", s.InPath)
+	case s.InPath == "":
+		return c.say("claude link: none; PATH has no claude")
+	default:
+		return c.say("claude link: none; a plain claude runs %s without cc-login (README: Starting claude)", s.InPath)
 	}
 }
 

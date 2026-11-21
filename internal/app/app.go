@@ -24,6 +24,8 @@ type Claude interface {
 	AuthStatus(ctx context.Context, env []string) (claude.AuthInfo, error)
 	AuthLogin(ctx context.Context, env, args []string) error
 	AuthLogout(ctx context.Context, env []string) error
+	SetupToken(ctx context.Context, env []string) error // on the user's terminal
+	InPath() (string, bool)                             // what a plain claude runs, and whether it is cc-login
 }
 
 // Prompter asks the user. On a terminal Secret shows what is typed as * and
@@ -33,6 +35,7 @@ type Prompter interface {
 	Secret(title, help string, valid func(string) error) (string, error)
 	Line(title, help string) (string, error)
 	Note(msg string) // a line for the user, on stderr
+	Terminal() bool  // the user is at a terminal
 }
 
 // App holds the store and the outside world.

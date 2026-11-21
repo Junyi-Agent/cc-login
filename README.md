@@ -10,7 +10,7 @@ cc-login), with only that login's credentials in claude's environment.
 
 It began as a port of `cc-login.zsh` and is now its own design: a `state.json`
 data layout, claude launched by exec. Decisions are in
-[docs/adr](docs/adr/README.md) (0006–0011).
+[docs/adr](docs/adr/README.md) (0006–0013).
 
 ## Status
 
@@ -21,9 +21,9 @@ data layout, claude launched by exec. Decisions are in
 | `use NAME` | makes a signed-in login the default |
 | `rename OLD NEW` | renames; the login stays signed in |
 | `remove NAME` | `claude auth logout`, then deletes the login; asks first (`--yes` without a terminal) |
-| `version`, `--version` | the version and commit; `--verbose` (or `CC_LOGIN_DEBUG=1`) logs what any command does on stderr, never keys or tokens |
+| `version`, `--version` | the version and commit; `version` also says which claude cc-login runs and whether the `claude` link is in place; `--verbose` (or `CC_LOGIN_DEBUG=1`) logs what any command does on stderr, never keys or tokens |
 | `completion` | zsh, bash, fish and powershell completion: commands, options, login names |
-| `add NAME` | a new login: a token from `claude setup-token` (the default, `--oauth-token`), an API key (`--api-key`), or a sign-in (`--sign-in [-- OPTS]`, through `claude auth login`); the key or token is shown as `*` while typed and checked with the API; without a terminal it is a line of stdin |
+| `add NAME` | a new login: a token from `claude setup-token`, which cc-login runs on the terminal (the default, `--oauth-token`), an API key (`--api-key`), or a sign-in (`--sign-in [-- OPTS]`, through `claude auth login`); the key or token is shown as `*` while typed and checked with the API; without a terminal it is a line of stdin |
 | `renew NAME [-- OPTS]` | signs a login in again so it expires later; a new token for a token login |
 | `adopt NAME` | moves `~/.claude/.credentials.json`, written by a claude run without cc-login, into a new login (`list` says when there is one) |
 
@@ -44,21 +44,28 @@ go run github.com/Junyi-Agent/cc-login/cmd/cc-login@6a3cea9 migrate
 
 cc-login starts claude itself, so a login's key or token is only in that
 claude's environment, never in your shell
-([ADR 0007](docs/adr/0007-launch-claude-by-exec.md)). Either:
+([ADR 0007](docs/adr/0007-launch-claude-by-exec.md)). Put a link named
+`claude` to cc-login in a directory early in `PATH`; any program that runs
+`claude` then gets the default login:
 
-- a link named `claude` to cc-login, in a directory early in `PATH`. Any
-  program that runs `claude` then gets the default login:
+```sh
+mkdir -p ~/.local/lib/cc-login
+ln -sf "$(command -v cc-login)" ~/.local/lib/cc-login/claude
+export PATH="$HOME/.local/lib/cc-login:$PATH"   # in ~/.zshrc, before other PATH changes
+```
 
-  ```sh
-  mkdir -p ~/.local/lib/cc-login
-  ln -sf "$(command -v cc-login)" ~/.local/lib/cc-login/claude
-  export PATH="$HOME/.local/lib/cc-login:$PATH"   # in ~/.zshrc, before other PATH changes
-  ```
+Claude Code's own installer uses `~/.local/bin/claude`; keep the link
+elsewhere. cc-login finds the real claude further down `PATH`, skipping
+itself; `CC_LOGIN_CLAUDE` names it instead. Check the link in a new shell:
 
-  (Claude Code's own installer uses `~/.local/bin/claude`; keep the link
-  elsewhere.) cc-login finds the real claude further down `PATH`, skipping
-  itself; `CC_LOGIN_CLAUDE` names it instead.
-- or an alias: `alias claude='cc-login run --'`.
+```console
+$ cc-login version
+cc-login v1.2.3 (go1.26.5)
+claude: /Users/me/.local/bin/claude
+claude link: /Users/me/.local/lib/cc-login/claude; a plain claude runs with the default login
+```
+
+`cc-login run [NAME] -- ARGS` starts claude with a login without the link.
 
 A claude started by cc-login marks its environment with `CC_LOGIN_ID`, so a
 claude it starts in turn (`claude -p`, hooks, scripts) stays on the same login
@@ -148,7 +155,7 @@ ADRs) are in [CLAUDE.md](CLAUDE.md); decisions in [docs/adr](docs/adr/README.md)
 |---|---|
 | `internal/state` | the data root: `state.json` (load, update under the lock), where each credentials directory is |
 | `internal/creds` | what a credentials directory holds: a key or token file, a sign-in's access token (`.credentials.json` or the Keychain), and the environment of a claude run with one login |
-| `internal/claude` | find claude; run `claude auth status`, `login`, `logout` |
+| `internal/claude` | find claude; run `claude auth status`, `login`, `logout` and `claude setup-token` |
 | `internal/anthropic` | the Anthropic API: the plan quota, checking a key or token |
 | `internal/app` | what each command does, one file per command; no output, no cobra |
 | `internal/ui` | the table and the JSON of `list` |

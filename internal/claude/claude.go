@@ -1,6 +1,6 @@
 // Package claude finds the claude CLI and runs its auth commands
-// (claude auth status, login, logout) in the environment it is given;
-// package creds makes that environment.
+// (claude auth status, login, logout, setup-token) in the environment it is
+// given; package creds makes that environment.
 package claude
 
 import (
@@ -53,6 +53,18 @@ func (CLI) AuthLogout(ctx context.Context, env []string) error {
 	return AuthLogout(ctx, path, env)
 }
 
+// SetupToken runs claude setup-token (SetupToken) with env.
+func (CLI) SetupToken(ctx context.Context, env []string) error {
+	path, err := Find()
+	if err != nil {
+		return err
+	}
+	return SetupToken(ctx, path, env)
+}
+
+// InPath is what a plain claude runs (InPath).
+func (CLI) InPath() (string, bool) { return InPath() }
+
 // ErrNotFound means there is no claude to run.
 var ErrNotFound = errors.New("claude is not installed, or not in PATH")
 
@@ -64,28 +76,59 @@ func Find() (string, error) {
 		return p, nil
 	}
 
-	self, _ := os.Executable()
-	selfInfo, _ := os.Stat(self)
+	for _, p := range inPath() {
+		if !isSelf(p) {
+			return p, nil
+		}
+	}
 
+	return "", ErrNotFound
+}
+
+// InPath is the claude that a plain `claude` runs, the first in PATH, and
+// whether it is this program: the claude link (ADR 0007). "" when PATH has
+// none.
+func InPath() (string, bool) {
+	all := inPath()
+	if len(all) == 0 {
+		return "", false
+	}
+	return all[0], isSelf(all[0])
+}
+
+// inPath are the executables named claude in PATH, in order.
+func inPath() []string {
+	var all []string
 	for _, dir := range filepath.SplitList(os.Getenv("PATH")) {
 		if dir == "" {
 			dir = "."
 		}
 		p := filepath.Join(dir, "claude")
 
-		// PATH is the user's own setting; Find only looks at what it lists.
+		// PATH is the user's own setting; inPath only looks at what it lists.
 		fi, err := os.Stat(p) //nolint:gosec // G703: see above
 		if err != nil || fi.IsDir() || fi.Mode()&0o111 == 0 {
 			continue
 		}
-		if selfInfo != nil && os.SameFile(fi, selfInfo) {
-			continue
-		}
+		all = append(all, p)
+	}
+	return all
+}
 
-		return p, nil
+// isSelf says whether the file at path is this program.
+func isSelf(path string) bool {
+	self, err := os.Executable()
+	if err != nil {
+		return false
 	}
 
-	return "", ErrNotFound
+	selfInfo, err := os.Stat(self)
+	if err != nil {
+		return false
+	}
+
+	fi, err := os.Stat(path) //nolint:gosec // G703: a path from PATH, see inPath
+	return err == nil && os.SameFile(fi, selfInfo)
 }
 
 // AuthInfo is what `claude auth status --json` says about a login.
@@ -195,6 +238,18 @@ func AuthLogin(ctx context.Context, path string, env, args []string) error {
 	err = cmd.Wait()
 	_ = w.Close()
 	return stopped(ctx, err)
+}
+
+// SetupToken runs `claude setup-token` with env on this terminal: a browser
+// opens, and claude prints a token for the user to paste into cc-login.
+// claude keeps nothing of it.
+func SetupToken(ctx context.Context, path string, env []string) error {
+	cmd := exec.CommandContext(ctx, path, "setup-token")
+	cmd.Env = env
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+	cmd.Cancel = func() error { return cmd.Process.Signal(syscall.SIGTERM) }
+
+	return stopped(ctx, cmd.Run())
 }
 
 // stopped is err, or ErrStopped when ctx was cancelled (Ctrl-C): claude

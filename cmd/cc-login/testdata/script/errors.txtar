@@ -14,6 +14,21 @@ stderr 'Run ''cc-login use --help'' for usage.'
 stderr 'none of the others can be'
 stderr 'Run ''cc-login add --help'' for usage.'
 
+# claude's options without --: where they go.
+! exec cc-login run -p hi
+stderr 'unknown shorthand flag'
+stderr 'options for claude go after --: cc-login run \[NAME\] -- OPTS'
+! exec cc-login add x --sign-in --email me@example.com
+stderr 'go after --sign-in --'
+! exec cc-login renew x --email me@example.com
+stderr 'cc-login renew NAME -- OPTS'
+! exec cc-login list --nope
+! stderr 'go after'
+
+# No logins: run says to add one.
+! exec cc-login run
+stderr 'no logins yet; add one with: cc-login add NAME'
+
 # The arguments are not echoed: a token pasted in the wrong place stays out
 # of the terminal.
 ! exec cc-login add work sk-ant-oat01-pasted
@@ -30,6 +45,10 @@ stdout '#compdef cc-login'
 # The version, and the debug log on stderr.
 exec cc-login version
 stdout '^cc-login .* \(go1\.'
+# The claude it runs, and the claude link. Whether the claude testscript
+# puts first in PATH is the same file as cc-login depends on the system.
+stdout '^claude: .*claude$'
+stdout '^claude link: '
 exec cc-login --version
 stdout '^cc-login '
 

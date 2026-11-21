@@ -13,9 +13,9 @@ func (c *cli) addCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add NAME [--sign-in [-- OPTS...] | --api-key | --oauth-token]",
 		Short: "Save a new login NAME",
-		Long: `Save a new login NAME. Without an option, read a token from claude setup-token
-(sk-ant-oat...), shown as *, and check it with the Anthropic API; it lasts a
-year. The new login becomes the default when the machine has none.
+		Long: `Save a new login NAME. Without an option, run claude setup-token on this
+terminal, then read the token it prints (sk-ant-oat...), shown as *, and check
+it with the Anthropic API; it lasts a year. The new login becomes the default when the machine has none.
 
 Without a terminal, the key or token is one line of stdin.`,
 		Example: `  cc-login add work

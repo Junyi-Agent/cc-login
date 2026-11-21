@@ -57,4 +57,10 @@ func TestRun(t *testing.T) {
 	if _, err := a.Run(""); !errors.Is(err, ErrNoDefault) {
 		t.Errorf("Run with no default = %v", err)
 	}
+
+	// No logins at all: the way out is add, not use.
+	empty := newApp(t, map[string]*state.Login{}, "", &fake{})
+	if _, err := empty.Run(""); !errors.Is(err, ErrNoLogins) {
+		t.Errorf("Run with no logins = %v", err)
+	}
 }

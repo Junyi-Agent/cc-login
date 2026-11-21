@@ -64,7 +64,10 @@ func (a *App) runID(st *state.State, name string) (string, error) {
 		return id, nil
 	}
 
-	if st.Logins[st.Default] == nil {
+	switch {
+	case len(st.Logins) == 0:
+		return "", ErrNoLogins
+	case st.Logins[st.Default] == nil:
 		return "", ErrNoDefault
 	}
 	return st.Default, nil
