@@ -124,18 +124,17 @@ func (c *Client) CheckKey(ctx context.Context, key string) (v Verdict, status in
 }
 
 // CheckToken asks the API whether it accepts token tok from claude
-// setup-token: a token count, which is free and uses no quota. org is the
-// organization the token belongs to (the anthropic-organization-id header).
-// A response with that header proves the token authenticated, whatever its
-// status (a retired model gives 404).
-func (c *Client) CheckToken(ctx context.Context, tok string) (v Verdict, org string, status int) {
+// setup-token: a token count, which is free and uses no quota. A response
+// with the anthropic-organization-id header proves the token authenticated,
+// whatever its status (a retired model gives 404).
+func (c *Client) CheckToken(ctx context.Context, tok string) (v Verdict, status int) {
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
 	body := strings.NewReader(`{"model":"claude-haiku-5-5","messages":[{"role":"user","content":"hi"}]}`)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/v1/messages/count_tokens", body)
 	if err != nil {
-		return Unknown, "", 0
+		return Unknown, 0
 	}
 	req.Header.Set("Authorization", "Bearer "+tok)
 	req.Header.Set("anthropic-beta", "oauth-2025-04-20")
@@ -144,14 +143,13 @@ func (c *Client) CheckToken(ctx context.Context, tok string) (v Verdict, org str
 
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
-		return Unknown, "", 0
+		return Unknown, 0
 	}
 	_ = resp.Body.Close()
 
-	org = strings.ReplaceAll(resp.Header.Get("anthropic-organization-id"), " ", "")
 	v = verdict(resp.StatusCode)
-	if v == Unknown && org != "" {
+	if v == Unknown && resp.Header.Get("anthropic-organization-id") != "" {
 		v = Accepted
 	}
-	return v, org, resp.StatusCode
+	return v, resp.StatusCode
 }

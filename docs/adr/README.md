@@ -31,3 +31,4 @@
 | [0012](0012-code-layout.md) | 代码布局：按命令分文件、统一命名、creds 管凭据目录 | 采纳 |
 | [0013](0013-first-run.md) | 上手：add 自己跑 setup-token，报错指出下一步，version 检查链接 | 采纳 |
 | [0014](0014-ship-script.md) | 用 scripts/ship.sh 一步合并 feature 分支 | 采纳 |
+| [0015](0015-simplify-more.md) | 再精简：token 不推断组织、renew 只做登录、表格一列过期时间、确认写 stderr | 采纳 |

@@ -13,8 +13,8 @@ import (
 // login's key or token never reaches another login's claude.
 var credVars = []string{
 	"CLAUDE_SECURESTORAGE_CONFIG_DIR",
-	"ANTHROPIC_API_KEY", "CC_LOGIN_API_KEY_DIR",
-	"CLAUDE_CODE_OAUTH_TOKEN", "CC_LOGIN_OAUTH_TOKEN_DIR",
+	"ANTHROPIC_API_KEY",
+	"CLAUDE_CODE_OAUTH_TOKEN",
 	"CC_LOGIN_ID", "CC_LOGIN_DEPTH",
 }
 

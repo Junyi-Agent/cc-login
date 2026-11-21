@@ -13,8 +13,8 @@ import (
 var base = []string{
 	"HOME=/home/me",
 	"CLAUDE_SECURESTORAGE_CONFIG_DIR=/other",
-	"ANTHROPIC_API_KEY=sk-ant-other", "CC_LOGIN_API_KEY_DIR=/other",
-	"CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat-other", "CC_LOGIN_OAUTH_TOKEN_DIR=/other",
+	"ANTHROPIC_API_KEY=sk-ant-other",
+	"CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat-other",
 }
 
 func TestEnv(t *testing.T) {

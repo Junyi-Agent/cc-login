@@ -16,7 +16,8 @@ stderr 'at most one NAME before --'
 
 # use: a signed-in login becomes the default; a signed-out one cannot.
 exec cc-login use ci
-stdout 'Default login: ci'
+! stdout .
+stderr 'Default login: ci'
 exec cc-login run
 stdout 'dir t1'
 
@@ -37,11 +38,11 @@ stderr 'needs a terminal to ask; to answer yes without one, pass --yes'
 exists root/.dirs/a1
 
 exec cc-login remove --yes home
-stdout 'Removed home.'
+stderr 'Removed home.'
 ! exists root/.dirs/a1
 
 exec cc-login remove -y ci
-stdout 'no default login now'
+stderr 'no default login now'
 ! exec cc-login run
 stderr 'no default login'
 

@@ -6,7 +6,6 @@ import (
 	"cmp"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 	"time"
 
@@ -17,30 +16,16 @@ import (
 	"github.com/Junyi-Agent/cc-login/internal/state"
 )
 
-// Options say how to draw the table.
-type Options struct {
-	Width int       // the terminal's width; 0 for no limit
-	Now   time.Time // the time the expiries and resets count from
-}
-
 // styles are the colors of the table.
 type styles struct {
 	dim, accent, ok, warn, bad lipgloss.Style
 }
 
-// newStyles makes the styles for renderer r. $CC_LOGIN_THEME (light or
-// dark) overrides the background lipgloss detects.
+// newStyles makes the styles for renderer r.
 func newStyles(r *lipgloss.Renderer) styles {
-	switch os.Getenv("CC_LOGIN_THEME") {
-	case "light":
-		r.SetHasDarkBackground(false)
-	case "dark":
-		r.SetHasDarkBackground(true)
-	}
-
 	return styles{
 		dim:    r.NewStyle().Foreground(lipgloss.Color("8")),
-		accent: r.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "130", Dark: "215"}).Bold(true),
+		accent: r.NewStyle().Foreground(lipgloss.Color("208")).Bold(true),
 		ok:     r.NewStyle().Foreground(lipgloss.Color("2")),
 		warn:   r.NewStyle().Foreground(lipgloss.Color("3")),
 		bad:    r.NewStyle().Foreground(lipgloss.Color("1")),
@@ -77,15 +62,15 @@ const (
 	colWeek
 	colStatus
 	colExpires
-	colDate
 	nCols
 )
 
-var headers = []string{"", "NAME", "ACCOUNT", "PLAN", "5H LEFT", "WEEK LEFT", "STATUS", "EXPIRES", ""}
+var headers = []string{"", "NAME", "ACCOUNT", "PLAN", "5H LEFT", "WEEK LEFT", "STATUS", "EXPIRES"}
 
-// Table writes the table of logins and the notes under it. Colors follow
-// the terminal w is (none when w is not a terminal, or with NO_COLOR).
-func Table(w io.Writer, views []app.View, opt Options) error {
+// Table writes the table of logins and the notes under it; expiries and
+// resets count from now. Colors follow the terminal w is (none when w is
+// not a terminal, or with NO_COLOR).
+func Table(w io.Writer, views []app.View, now time.Time) error {
 	if len(views) == 0 {
 		_, err := fmt.Fprintln(w, "No logins yet; add one with: cc-login add NAME")
 		return err
@@ -95,40 +80,28 @@ func Table(w io.Writer, views []app.View, opt Options) error {
 	s := newStyles(r)
 	rows := make([][]cell, len(views))
 	for i, v := range views {
-		rows[i] = viewRow(v, s, opt.Now)
+		rows[i] = viewRow(v, s, now)
 	}
 
-	out := fit(rows, s, opt.Width)
-	if _, err := fmt.Fprintln(w, out); err != nil {
+	if _, err := fmt.Fprintln(w, draw(rows, s)); err != nil {
 		return err
 	}
 
 	return notes(w, views, s)
 }
 
-// fit draws the table, without the date column when it is wider than width
-// (0 for no limit).
-func fit(rows [][]cell, s styles, width int) string {
-	out := draw(rows, s, nCols)
-	if width > 0 && lipgloss.Width(out) > width {
-		out = draw(rows, s, colDate)
-	}
-	return out
-}
-
-// draw lays out the first n columns of the rows under the headers: each
-// column as wide as its widest cell, two spaces between columns, one after
-// the default mark.
-func draw(rows [][]cell, s styles, n int) string {
-	head := make([]cell, n)
-	for c := range n {
+// draw lays out the rows under the headers: each column as wide as its
+// widest cell, two spaces between columns, one after the default mark.
+func draw(rows [][]cell, s styles) string {
+	head := make([]cell, nCols)
+	for c := range nCols {
 		head[c] = cell{text: headers[c], style: s.dim}
 	}
 	all := append([][]cell{head}, rows...)
 
-	widths := make([]int, n)
+	widths := make([]int, nCols)
 	for _, r := range all {
-		for c := range n {
+		for c := range nCols {
 			widths[c] = max(widths[c], lipgloss.Width(r[c].text))
 		}
 	}
@@ -136,7 +109,7 @@ func draw(rows [][]cell, s styles, n int) string {
 	lines := make([]string, len(all))
 	for i, r := range all {
 		var b strings.Builder
-		for c := range n {
+		for c := range nCols {
 			if r[c].text != "" {
 				b.WriteString(r[c].style.Render(r[c].text))
 			}
@@ -172,7 +145,7 @@ func viewRow(v app.View, s styles, now time.Time) []cell {
 	}
 	row[colStatus] = cell{text: mark + " " + statusText(v), style: s.tone(v.Status)}
 
-	row[colExpires], row[colDate] = expiryCells(v, s, now)
+	row[colExpires] = expiryCell(v, s, now)
 	return row
 }
 
@@ -217,33 +190,24 @@ func windowCell(w *anthropic.Window, layout string, s styles) cell {
 	return c
 }
 
-// expiryCells are when the sign-in or token expires: relative, and the
-// date and time (with the year when it is not this year).
-func expiryCells(v app.View, s styles, now time.Time) (cell, cell) {
-	tone := s.tone(v.Status)
-	if v.Status == app.SignedIn {
-		tone = lipgloss.NewStyle()
-	}
-
+// expiryCell is when the sign-in or token expires, relative to now (list
+// --json has the time).
+func expiryCell(v app.View, s styles, now time.Time) cell {
 	switch {
 	case v.ExpiresAt.IsZero() && v.Kind == state.APIKey:
-		return cell{text: "never"}, cell{}
+		return cell{text: "never"}
 	case v.ExpiresAt.IsZero():
-		return cell{text: "-"}, cell{}
+		return cell{text: "-"}
 	}
 
-	rel := "in " + Ago(v.ExpiresAt.Sub(now))
+	c := cell{text: "in " + Ago(v.ExpiresAt.Sub(now))}
 	if !v.ExpiresAt.After(now) {
-		rel = Ago(now.Sub(v.ExpiresAt)) + " ago"
+		c.text = Ago(now.Sub(v.ExpiresAt)) + " ago"
 	}
-
-	t := v.ExpiresAt.Local()
-	layout := "2006-01-02 15:04"
-	if t.Year() == now.Local().Year() {
-		layout = "01-02 15:04"
+	if v.Status != app.SignedIn {
+		c.style = s.tone(v.Status)
 	}
-
-	return cell{text: rel, style: tone}, cell{text: t.Format(layout), style: s.dim}
+	return c
 }
 
 // Ago is a duration in one unit: minutes under an hour (52m), hours under

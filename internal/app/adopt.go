@@ -53,7 +53,7 @@ func (a *App) Adopt(ctx context.Context, name string) (Saved, error) {
 
 	l := &state.Login{Name: name, Kind: state.SignIn, CreatedAt: a.Now().UTC()}
 	if cs, errStatus := a.Claude.AuthStatus(ctx, a.storedEnv(id)); errStatus == nil {
-		setAccount(l, cs)
+		l.Account, l.Plan = cs.Email, cs.Plan
 	}
 
 	return a.addLogin(id, l)

@@ -83,11 +83,11 @@ echo '{"loggedIn":true,"email":"me@example.com","orgId":"org-1","orgName":"Examp
 
 	st, err := AuthStatus(ctx, in, nil)
 	want := AuthInfo{
-		SignedIn: true, Email: "me@example.com", OrgID: "org-1", OrgName: "Example", Plan: "max",
+		SignedIn: true, Email: "me@example.com", Plan: "max",
 		ExpiresAt: time.Date(2026, 12, 1, 10, 0, 0, 123_000_000, time.UTC),
 	}
 	if err != nil || !st.ExpiresAt.Equal(want.ExpiresAt) || st.SignedIn != want.SignedIn ||
-		st.Email != want.Email || st.OrgID != want.OrgID || st.OrgName != want.OrgName || st.Plan != want.Plan {
+		st.Email != want.Email || st.Plan != want.Plan {
 		t.Errorf("signed in: %+v, %v; want %+v", st, err, want)
 	}
 

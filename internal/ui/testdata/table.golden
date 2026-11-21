@@ -1,9 +1,9 @@
   NAME   ACCOUNT                          PLAN  5H LEFT    WEEK LEFT  STATUS        EXPIRES
-▸ work   me@example.com                   team  70% 15:00  15% 11-23  ● signed in   in 30d   12-21 12:00
-  soon   a-long-account-name@example.com  max   40%        -          ● expiring    in 30h   11-22 18:00
-  old    -                                -     -          -          ● expired     5h ago   11-21 07:00
+▸ work   me@example.com                   team  70% 15:00  15% 11-23  ● signed in   in 30d
+  soon   a-long-account-name@example.com  max   40%        -          ● expiring    in 30h
+  old    -                                -     -          -          ● expired     5h ago
   gone   x@example.com                    -     -          -          ○ signed out  -
-  ci     -                                -     -          -          ● token       in 400d  2027-12-26 12:00
+  ci     -                                -     -          -          ● token       in 400d
   api    API key …wxyz                    api   -          -          ● signed in   never
   stale  -                                -     ?          ?          ● signed in   -
 

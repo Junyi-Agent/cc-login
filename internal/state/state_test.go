@@ -26,7 +26,7 @@ func TestUpdateRoundTrip(t *testing.T) {
 	saved := time.Date(2026, 11, 21, 8, 0, 0, 0, time.UTC)
 
 	err := s.Update(func(st *State) error {
-		st.Logins["A"] = &Login{Name: "work", Kind: Token, Account: "me@example.com", TokenSavedAt: &saved}
+		st.Logins["A"] = &Login{Name: "work", Kind: Token, Account: "me@example.com", TokenExpiresAt: &saved}
 		st.Default = "A"
 		return nil
 	})
@@ -52,7 +52,7 @@ func TestUpdateRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	l := st.Logins["A"]
-	if st.Default != "A" || l.Name != "work" || l.Kind != Token || !l.TokenSavedAt.Equal(saved) {
+	if st.Default != "A" || l.Name != "work" || l.Kind != Token || !l.TokenExpiresAt.Equal(saved) {
 		t.Errorf("loaded %+v, %+v", st, l)
 	}
 }

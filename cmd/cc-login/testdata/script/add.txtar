@@ -2,9 +2,10 @@
 # tests, so the token is saved unchecked.
 stdin token
 exec cc-login add ci
-stdout 'Added login ci\.'
-stdout 'The token expires about'
-stdout 'It is the default login\.'
+! stdout .
+stderr 'Added login ci\.'
+stderr 'The token expires about'
+stderr 'It is the default login\.'
 stderr 'claude setup-token'
 stderr 'saving it unchecked'
 ! stderr 'fake-token'
@@ -14,14 +15,14 @@ stdout 'dir .*; key false; token true'
 # A key, after the first login: not the default.
 stdin key
 exec cc-login add api --api-key
-stdout 'Make it the default with: cc-login use api'
+stderr 'Make it the default with: cc-login use api'
 exec cc-login list
 stdout '^  api +API key …wxyz +api '
 
 # A sign-in through claude auth login, options after --.
 exec cc-login add home --sign-in -- --email new@example.com
 stdout 'Login successful'
-stdout 'Added login home \(new@example.com\)'
+stderr 'Added login home \(new@example.com\)'
 
 # Already there.
 stdin token
@@ -36,7 +37,7 @@ stderr 'need --sign-in'
 
 # renew: a sign-in again; a key never expires.
 exec cc-login renew home -- --email new@example.com
-stdout 'Renewed login home; it expires 2031-01-01'
+stderr 'Renewed login home; it expires 2031-01-01'
 ! exec cc-login renew api
 stderr 'does not expire'
 
@@ -47,7 +48,7 @@ cp creds dotclaude/.credentials.json
 exec cc-login list
 stderr 'cc-login adopt NAME'
 exec cc-login adopt stray
-stdout 'into login stray'
+stderr 'into login stray'
 ! exists dotclaude/.credentials.json
 exec cc-login list
 ! stderr 'adopt'

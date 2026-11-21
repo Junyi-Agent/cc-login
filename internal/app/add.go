@@ -89,9 +89,25 @@ func (a *App) authenticate(ctx context.Context, id string, l *state.Login, args 
 
 	switch l.Kind {
 	case state.APIKey:
-		return a.saveKey(ctx, dir, l, p)
+		key, err := a.saveSecret(ctx, dir, l, p)
+		if err != nil {
+			return err
+		}
+		l.KeyHint = key[len(key)-4:]
+		return nil
+
 	case state.Token:
-		return a.saveToken(ctx, dir, l, p)
+		if err := a.setupToken(ctx, dir, l.Name, p); err != nil {
+			return err
+		}
+		if _, err := a.saveSecret(ctx, dir, l, p); err != nil {
+			return err
+		}
+		askAccount(l, p)
+		expires := a.Now().UTC().Add(tokenLife)
+		l.TokenExpiresAt = &expires
+		return nil
+
 	case state.SignIn:
 	}
 
@@ -116,87 +132,51 @@ func (a *App) saveSignIn(ctx context.Context, id string, l *state.Login, args []
 		return errors.New("claude auth login ended, but the login is not signed in")
 	}
 
-	setAccount(l, cs)
+	l.Account, l.Plan = cs.Email, cs.Plan
 	return nil
 }
 
-// setAccount records in l the account claude auth status reported.
-func setAccount(l *state.Login, cs claude.AuthInfo) {
-	l.Account, l.OrgID, l.OrgName, l.Plan = cs.Email, cs.OrgID, cs.OrgName, cs.Plan
-}
+// saveSecret reads the API key or the token of login l, checks it with the
+// API and saves it in dir. It returns the secret.
+func (a *App) saveSecret(ctx context.Context, dir string, l *state.Login, p Prompter) (string, error) {
+	noun, title, help, prefix, check := "key", "API key", "An Anthropic API key, sk-ant-...; it shows as *.", "sk-ant-", a.CheckKey
+	if l.Kind == state.Token {
+		noun, title, help, prefix, check = "token", "Token", "The token claude setup-token printed (sk-ant-oat...); it shows as *.", "sk-ant-oat", a.CheckToken
+	}
+	valid := validPrefix(prefix)
 
-// saveKey reads an API key, checks it with the API and saves it.
-func (a *App) saveKey(ctx context.Context, dir string, l *state.Login, p Prompter) error {
-	valid := validPrefix("sk-ant-")
-	key, err := p.Secret("API key for "+l.Name, "An Anthropic API key, sk-ant-...; it shows as *.", valid)
+	s, err := p.Secret(title+" for "+l.Name, help, valid)
 	if err != nil {
-		return err
+		return "", err
 	}
-	if err := valid(key); err != nil {
-		return err
+	if err := valid(s); err != nil {
+		return "", err
 	}
 
-	v, status := a.CheckKey(ctx, key)
-	a.Log.Debug("check key", "login", l.Name, "verdict", v, "status", status)
+	v, status := check(ctx, s)
+	a.Log.Debug("check "+noun, "login", l.Name, "verdict", v, "status", status)
 	switch v {
 	case anthropic.Rejected:
-		return fmt.Errorf("the Anthropic API rejected the key (HTTP %d); nothing saved", status)
+		return "", fmt.Errorf("the Anthropic API rejected the %s (HTTP %d); nothing saved", noun, status)
 	case anthropic.Unknown:
-		p.Note(fmt.Sprintf("Could not check the key (%s); saving it unchecked.", httpStatus(status)))
+		p.Note(fmt.Sprintf("Could not check the %s (%s); saving it unchecked.", noun, httpStatus(status)))
 	case anthropic.Accepted:
 	}
 
-	if err := creds.WriteSecret(dir, state.APIKey, key); err != nil {
-		return err
-	}
-
-	l.KeyHint = key[len(key)-4:]
-	return nil
+	return s, creds.WriteSecret(dir, l.Kind, s)
 }
 
-// saveToken reads a token from claude setup-token, checks it with the API
-// and saves it. A token cannot read its account, so it asks for one to show
-// when the login has none.
-func (a *App) saveToken(ctx context.Context, dir string, l *state.Login, p Prompter) error {
-	if err := a.setupToken(ctx, dir, l.Name, p); err != nil {
-		return err
+// askAccount asks for the email of token login l, to show in list: a token
+// cannot read it. A login that has one keeps it.
+func askAccount(l *state.Login, p Prompter) {
+	if l.Account != "" {
+		return
 	}
 
-	valid := validPrefix("sk-ant-oat")
-	tok, err := p.Secret("Token for "+l.Name, "The token claude setup-token printed (sk-ant-oat...); it shows as *.", valid)
-	if err != nil {
-		return err
+	acct, err := p.Line("Account of "+l.Name, "The email to show in cc-login list; a token cannot read it. Enter skips.")
+	if err == nil && acct != "" {
+		l.Account = strings.Join(strings.Fields(acct), "")
 	}
-	if err := valid(tok); err != nil {
-		return err
-	}
-
-	v, org, status := a.CheckToken(ctx, tok)
-	a.Log.Debug("check token", "login", l.Name, "verdict", v, "status", status, "org", org)
-	switch v {
-	case anthropic.Rejected:
-		return fmt.Errorf("the Anthropic API rejected the token (HTTP %d); nothing saved", status)
-	case anthropic.Unknown:
-		p.Note(fmt.Sprintf("Could not check the token (%s); saving it unchecked.", httpStatus(status)))
-	case anthropic.Accepted:
-	}
-
-	if err := creds.WriteSecret(dir, state.Token, tok); err != nil {
-		return err
-	}
-
-	if l.Account == "" {
-		if acct, err := p.Line("Account of "+l.Name, "The email to show in cc-login list; a token cannot read it. Enter skips."); err == nil && acct != "" {
-			l.Account = strings.Join(strings.Fields(acct), "")
-		}
-	}
-
-	a.tokenOrg(l, org)
-
-	now := a.Now().UTC()
-	expires := now.Add(tokenLife)
-	l.TokenSavedAt, l.TokenExpiresAt = &now, &expires
-	return nil
 }
 
 // setupToken runs claude setup-token on the user's terminal for login name,
@@ -220,36 +200,6 @@ func (a *App) setupToken(ctx context.Context, dir, name string, p Prompter) erro
 		p.Note(fmt.Sprintf("claude setup-token failed (%v); run it in another terminal and paste the token it prints.", err))
 	}
 	return nil
-}
-
-// tokenOrg records the token's organization. The organization's name, and
-// the plan of the same account in it, come from other logins: a token
-// cannot read them.
-func (a *App) tokenOrg(l *state.Login, org string) {
-	if org == "" {
-		return
-	}
-
-	if l.OrgID != org {
-		l.OrgName, l.Plan = "", ""
-	}
-	l.OrgID = org
-
-	st, err := a.Store.Load()
-	if err != nil {
-		return
-	}
-	for _, other := range st.Logins {
-		if other.Name == l.Name || other.OrgID != org {
-			continue
-		}
-		if l.OrgName == "" {
-			l.OrgName = other.OrgName
-		}
-		if l.Plan == "" && l.Account != "" && other.Account == l.Account {
-			l.Plan = other.Plan
-		}
-	}
 }
 
 // validPrefix checks a pasted key or token: the prefix, and no spaces.

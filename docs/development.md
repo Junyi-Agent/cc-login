@@ -55,4 +55,6 @@ The code of a command is in `cmd/cc-login/<command>.go` and
    not do them ([ADR 0010](adr/0010-statusline-and-quota-refresh.md))
 7. ~~first run: `add` runs setup-token, errors name the next step, `version`
    checks the link~~ ([ADR 0013](adr/0013-first-run.md))
-8. `cc-login tui` (ADR 0006)
+8. ~~simplify more: no token organization, leaner renew, one expiry column,
+   confirmations on stderr~~ ([ADR 0015](adr/0015-simplify-more.md))
+9. `cc-login tui` (ADR 0006)

@@ -20,7 +20,6 @@ zsh 版的数据目录：`NAME -> .dirs/ID` 符号链接、`NAME.json` 记录、
         "name": "work",
         "kind": "sign-in",
         "account": "me@example.com",
-        "organization": "Example",
         "plan": "team",
         "created_at": "2026-11-21T08:00:00Z",
         "token_expires_at": null
