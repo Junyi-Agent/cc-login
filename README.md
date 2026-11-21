@@ -9,10 +9,10 @@ claude gets only its own login's credentials.
 
 ## Getting Started
 
-Install:
+Install (macOS or Linux; the binary goes to `~/.local/bin`):
 
 ```sh
-go install github.com/Junyi-Agent/cc-login/cmd/cc-login@latest
+curl -fsSL https://raw.githubusercontent.com/Junyi-Agent/cc-login/main/install.sh | sh
 ```
 
 Add a login (cc-login runs `claude setup-token`, then asks you to paste the token):

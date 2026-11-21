@@ -32,8 +32,14 @@ exits 1.
 
 ## Install
 
-`go install` as in [[README]]; releases (`v*` tags) also publish darwin and
-linux binaries. Completion, in `~/.zshrc` after `compinit`:
+`install.sh` (in [[README]]) downloads the latest release for this machine
+from [GitHub releases](https://github.com/Junyi-Agent/cc-login/releases),
+checks it against the release's `checksums.txt`, and installs it in
+`~/.local/bin`; `sh -s -- DIR` installs it in DIR. Run it again to update.
+With Go, `go install github.com/Junyi-Agent/cc-login/cmd/cc-login@latest`
+builds it instead.
+
+Completion, in `~/.zshrc` after `compinit`:
 
 ```sh
 source <(cc-login completion zsh)
