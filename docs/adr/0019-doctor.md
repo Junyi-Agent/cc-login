@@ -1,6 +1,6 @@
 # 0019 cc-login doctor 检查配置
 
-状态：采纳
+状态：已验证
 
 ## 背景
 
@@ -23,3 +23,10 @@
 
 - `version` 的链接检查和 `doctor` 重复，保留：`version` 短，常用来看版本。
 - 以后新增的配置要求，在 `internal/app/doctor.go` 里加一条检查。
+
+## 验证
+
+验证人：Junyi
+日期：2026-11-22
+测了什么：在真实环境里运行 doctor，全部 ✓；去掉链接目录时报 ✗ 并给出 fix；shell 里设 ANTHROPIC_API_KEY 时报警告且不显示 key 的值。
+结果：通过。未测：login 文件缺失、权限、token 过期、state.json 损坏等（只有单元测试覆盖）。

@@ -32,7 +32,7 @@
 | [0013](0013-first-run.md) | 上手：add 自己跑 setup-token，报错指出下一步，version 检查链接 | 采纳（setup-token 部分已被 0017 取代） |
 | [0014](0014-ship-script.md) | 用 scripts/ship.sh 一步合并 feature 分支 | 采纳 |
 | [0015](0015-simplify-more.md) | 再精简：token 不推断组织、renew 只做登录、表格一列过期时间、确认写 stderr | 采纳 |
-| [0016](0016-release-binaries.md) | 用 GitHub release 的二进制安装：固定的包名和 install.sh | 采纳 |
+| [0016](0016-release-binaries.md) | 用 GitHub release 的二进制安装：固定的包名和 install.sh | 已验证 |
 | [0017](0017-own-oauth.md) | token login 由 cc-login 自己走 OAuth，多要 user:profile | 采纳 |
-| [0018](0018-list-org-and-token-quota.md) | 无命令时给帮助；list 加组织列；token login 读配额和 profile | 采纳 |
-| [0019](0019-doctor.md) | cc-login doctor 检查配置：链接、shell 变量、login 文件和过期 | 采纳 |
+| [0018](0018-list-org-and-token-quota.md) | 无命令时给帮助；list 加组织列；token login 读配额和 profile | 已验证 |
+| [0019](0019-doctor.md) | cc-login doctor 检查配置：链接、shell 变量、login 文件和过期 | 已验证 |

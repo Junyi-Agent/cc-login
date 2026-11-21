@@ -1,6 +1,6 @@
 # 0018 无命令时给帮助；list 加组织列；token login 读配额和 profile
 
-状态：采纳
+状态：已验证
 
 ## 背景
 
@@ -19,3 +19,10 @@
 - 依赖没公开的 `/api/oauth/profile`；它变了只会让 `org` 和 `plan` 为空，不影响登录和启动 claude。
 - 以前存的 token login 没有 `org`，`renew` 一次才有。
 - 读 token 文件里的 token 属于 `internal/creds`；`list` 把它只发给 Anthropic 的 usage 地址，不写日志和错误信息。
+
+## 验证
+
+验证人：Junyi
+日期：2026-11-22
+测了什么：cc-login 不带命令输出帮助；list 表头是 EMAIL、ORG；用真实账号 add 新的 token login，list 里有邮箱、组织、plan 和 5H/WEEK 额度；renew 旧 token login 后同样有；旧 login 的 ORG 显示 -。
+结果：通过。未测：读 profile 失败时 login 照存（只有单元测试覆盖）。
