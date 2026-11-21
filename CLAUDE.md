@@ -30,7 +30,8 @@ pre-commit install
 
 ## 移植规则
 
-- 移植的命令要和 zsh 版逐字节一致：输出（含颜色和窄终端下的截断）、退出码、写的文件、数据目录布局。验收方法：设 `CC_LOGIN_ZSH` 为 `cc-login.zsh` 的路径，跑 README 里的 `diff` 命令。配额是实时数据，相邻两次请求之间可能变，不一致时再跑一次确认。
+- 移植的命令要和 zsh 版逐字节一致：命令的输出（含颜色和窄终端下的截断）、退出码、写的文件、数据目录布局。验收方法：设 `CC_LOGIN_ZSH` 为 `cc-login.zsh` 的路径，跑 README 里的 `diff` 命令。配额是实时数据，相邻两次请求之间可能变，不一致时再跑一次确认。
+- help、用法和参数报错由 cobra 生成，不要求和 zsh 版一致（用户 2026-11-21 决定，见 [[docs/adr/0006-cobra-and-bubbletea]]）。选项注册给 cobra，参数检查用 cobra 的 `Args`，不手写解析。
 - Go 版新增、zsh 版没有的功能（如 `list --json`）写进 README 的状态表。
 - zstyle 设置由 zsh shim 转成环境变量（`CC_LOGIN_THEME`、`CC_LOGIN_QUOTA_CACHE`），Go 不读 zstyle。
 - 不改变凭据目录的路径字符串：Keychain 条目名是这个路径的 SHA-256 前 8 位，路径一变，login 就显示未登录。

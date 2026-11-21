@@ -9,7 +9,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -19,22 +18,14 @@ import (
 	"github.com/Junyi-Agent/cc-login/internal/store"
 )
 
-// ported are the commands this binary implements so far; the others pass the
-// argument checks and then say to use cc-login.zsh.
-var ported = map[string]bool{"list": true, "completion": true}
-
 // app is one run of cc-login: where it writes and which data directory it
 // reads.
 type app struct {
 	out, err io.Writer
 	store    *store.Store
 	root     *cobra.Command
+	ran      bool // the command line passed the checks and the command ran
 }
-
-// exitCode ends a run with that code; the message is already printed.
-type exitCode int
-
-func (e exitCode) Error() string { return "exit status " + strconv.Itoa(int(e)) }
 
 func (a *app) errf(format string, args ...any) {
 	_, _ = fmt.Fprintf(a.err, "cc-login: "+format+"\n", args...)
@@ -54,95 +45,26 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 	a.root.SetArgs(args)
 
-	err := a.root.Execute()
-
-	var code exitCode
-	switch {
-	case errors.As(err, &code):
-		return int(code)
-	case err != nil:
-		a.errf("%v", err)
-		return 1
-	}
-	return 0
-}
-
-// dispatch runs cmd with its arguments; cmd is "" when cc-login has no
-// arguments.
-func (a *app) dispatch(cmd string, args []string) error {
-	// cc-login, and cc-login "" as ${1:-list} in zsh.
-	if cmd == "" {
-		cmd = "list"
+	c, err := a.root.ExecuteC()
+	if err == nil {
+		return 0
 	}
 
-	switch cmd {
-	case "help", "-h", "--help":
-		return a.help(args)
-	case "list", "use", "add", "run", "renew", "rename", "remove", "completion":
-	default:
-		return a.unknown(cmd)
+	// A wrong command line also points to the help of the command.
+	a.errf("%v", err)
+	if !a.ran {
+		_, _ = fmt.Fprintf(a.err, "Run '%s --help' for usage.\n", c.CommandPath())
 	}
-
-	inv, code, done := a.parse(cmd, args)
-	if done {
-		return exitCode(code)
-	}
-
-	if !ported[cmd] {
-		a.errf("%s is not ported to Go yet; run it with the zsh cc-login", cmd)
-		return exitCode(1)
-	}
-
-	if cmd == "completion" {
-		return a.root.GenZshCompletion(a.out)
-	}
-
-	if !a.checkSetUp() {
-		return exitCode(1)
-	}
-
-	// list is the only ported command that gets here.
-	return a.list(inv.json)
-}
-
-// help prints the usage of all commands, or of the one command in args.
-func (a *app) help(args []string) error {
-	switch {
-	case len(args) == 0:
-		printUsage(a.out, "")
-		return nil
-	case len(args) == 1 && usageText[args[0]] != "":
-		printUsage(a.out, args[0])
-		return nil
-	}
-
-	a.errf("no command %s; the commands: %s", args[0], strings.Join(cmds, " "))
-	return exitCode(1)
-}
-
-// unknown reports a first argument that is not a command; when it names a
-// login, it says how to make that login the default.
-func (a *app) unknown(cmd string) error {
-	if strings.HasPrefix(cmd, "-") {
-		a.errf("unknown option %s; see cc-login help", cmd)
-		return exitCode(1)
-	}
-
-	a.errf("unknown command %s; the commands: %s", cmd, strings.Join(cmds, " "))
-	if _, ok := a.store.Dir(cmd); ok {
-		a.errf("to make login %s the default, run: cc-login use %s", cmd, cmd)
-	}
-	return exitCode(1)
+	return 1
 }
 
 // checkSetUp is the read-only part of _cc_login_check: setting cc-login up
 // and adopting stray credentials ask questions and move files, which the zsh
 // version still does.
-func (a *app) checkSetUp() bool {
+func (a *app) checkSetUp() error {
 	s := a.store
 	if !s.SetUp() {
-		a.errf("cc-login is not set up on this machine; set it up with the zsh cc-login")
-		return false
+		return errors.New("cc-login is not set up on this machine; set it up with the zsh cc-login")
 	}
 
 	// CLAUDE_CONFIG_DIR is the user's own setting; cc-login reads it as Claude Code does.
@@ -163,11 +85,15 @@ func (a *app) checkSetUp() bool {
 		}
 	}
 
-	return true
+	return nil
 }
 
 // list prints the logins as a table, or as JSON.
 func (a *app) list(asJSON bool) error {
+	if err := a.checkSetUp(); err != nil {
+		return err
+	}
+
 	s := a.store
 	p := listing.NewProber(s)
 	logins := p.All(context.Background(), s.Names())
@@ -175,8 +101,7 @@ func (a *app) list(asJSON bool) error {
 
 	if asJSON {
 		if err := listing.RenderJSON(a.out, logins, current, p.Now); err != nil {
-			a.errf("could not write the JSON: %v", err)
-			return exitCode(1)
+			return fmt.Errorf("could not write the JSON: %w", err)
 		}
 		return nil
 	}
@@ -192,8 +117,7 @@ func (a *app) list(asJSON bool) error {
 	}
 
 	if err := listing.Render(a.out, logins, current, p.Now, st); err != nil {
-		a.errf("could not write the list: %v", err)
-		return exitCode(1)
+		return fmt.Errorf("could not write the list: %w", err)
 	}
 	return nil
 }

@@ -4,13 +4,8 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
-
-	"github.com/spf13/cobra"
-
-	"github.com/Junyi-Agent/cc-login/internal/store"
 )
 
 // setUp makes a data directory with login work and points CC_LOGIN_ROOT at
@@ -39,89 +34,76 @@ func runCapture(args ...string) (code int, stdout, stderr string) {
 	return code, out.String(), errb.String()
 }
 
-func usage(cmd string) string { return "usage:\n" + usageText[cmd] + "\n" }
-
-const commands = "list use add run renew rename remove completion help"
-
-// The messages and exit codes of cc-login.zsh, for command lines it rejects.
+// A wrong command line fails with the reason and a pointer to the help of
+// the command, and prints nothing on stdout.
 func TestRunRejects(t *testing.T) {
 	setUp(t)
 
 	cases := []struct {
-		args   []string
-		stderr string
+		args []string
+		why  string // in the error
+		help string // the command whose help the error points to
 	}{
-		{[]string{"nope"}, "cc-login: unknown command nope; the commands: " + commands + "\n"},
-		{[]string{"work"}, "cc-login: unknown command work; the commands: " + commands + "\n" +
-			"cc-login: to make login work the default, run: cc-login use work\n"},
-		{[]string{"-x", "list"}, "cc-login: unknown option -x; see cc-login help\n"},
-		{[]string{"--json"}, "cc-login: unknown option --json; see cc-login help\n"},
+		{[]string{"nope"}, `unknown command "nope"`, "cc-login"},
+		{[]string{"lsit"}, "did you mean list?", "cc-login"},
+		{[]string{"work"}, "to make login work the default, run: cc-login use work", "cc-login"},
+		{[]string{"-x"}, "unknown shorthand flag", "cc-login"},
 
-		{[]string{"help", "nope"}, "cc-login: no command nope; the commands: " + commands + "\n"},
-		{[]string{"help", "a", "b"}, "cc-login: no command a; the commands: " + commands + "\n"},
-		{[]string{"help", "-h"}, "cc-login: no command -h; the commands: " + commands + "\n"},
+		{[]string{"list", "extra"}, `unknown command "extra"`, "cc-login list"},
+		{[]string{"list", "--yaml"}, "unknown flag: --yaml", "cc-login list"},
+		{[]string{"use"}, "accepts 1 arg(s), received 0", "cc-login use"},
+		{[]string{"use", "a", "b"}, "accepts 1 arg(s), received 2", "cc-login use"},
+		{[]string{"rename", "a"}, "accepts 2 arg(s), received 1", "cc-login rename"},
 
-		{[]string{"list", "extra"}, usage("list")},
-		{[]string{"list", "--json", "x"}, usage("list")},
-		{[]string{"use"}, usage("use")},
-		{[]string{"use", "-x"}, usage("use")},
-		{[]string{"use", ""}, usage("use")},
-		{[]string{"use", "a", "b"}, usage("use")},
-		{[]string{"rename", "a"}, usage("rename")},
-		{[]string{"rename", "a", "-b"}, usage("rename")},
-		{[]string{"rename", "a", ""}, usage("rename")},
-
-		{[]string{"add"}, usage("add")},
-		{[]string{"add", "--api-key", "a"}, usage("add")},
-		{[]string{"add", "a", "--api-key", "x"}, "cc-login: add NAME --api-key takes nothing more\n" + usage("add")},
-		{[]string{"add", "a", "--oauth-token", "x", "y"}, "cc-login: add NAME --oauth-token takes nothing more\n" + usage("add")},
-		{[]string{"add", "a", "foo", "bar"}, "cc-login: unexpected argument foo; options for claude go after --: cc-login add a -- foo bar\n" + usage("add")},
-		{[]string{"add", "a", "--sign-in", "foo"}, "cc-login: unexpected argument foo; options for claude go after --: cc-login add a --sign-in -- foo\n" + usage("add")},
-		{[]string{"add", "a", "--", "--email", "x"}, "cc-login: options for claude auth login need --sign-in: cc-login add a --sign-in -- --email x\n" + usage("add")},
-
-		// cc-login.zsh suggests --sign-in here too; run does not take it.
-		{[]string{"run", "a", "foo"}, "cc-login: unexpected argument foo; options for claude go after --: cc-login run a -- foo\n" + usage("run")},
-		{[]string{"run"}, usage("run")},
-
-		{[]string{"completion"}, usage("completion")},
-		{[]string{"completion", "bash"}, usage("completion")},
+		{[]string{"add"}, "add takes one NAME before --, not 0 arguments", "cc-login add"},
+		{[]string{"add", "a", "b"}, "add takes one NAME before --, not 2 arguments", "cc-login add"},
+		{[]string{"add", "a", "--", "--email", "x"}, "options for claude auth login need --sign-in", "cc-login add"},
+		{[]string{"add", "a", "--api-key", "--sign-in"}, "none of the others can be", "cc-login add"},
+		{[]string{"run", "a", "foo"}, "run takes one NAME before --, not 2 arguments", "cc-login run"},
+		{[]string{"renew", "--", "x"}, "renew takes one NAME before --, not 0 arguments", "cc-login renew"},
 	}
 
 	for _, tc := range cases {
 		code, out, errOut := runCapture(tc.args...)
-		if code != 1 || out != "" || errOut != tc.stderr {
-			t.Errorf("run(%q) = %d, stdout %q, stderr:\n%s\nwant 1, no stdout, stderr:\n%s", tc.args, code, out, errOut, tc.stderr)
+		hint := "Run '" + tc.help + " --help' for usage.\n"
+		if code != 1 || out != "" || !strings.Contains(errOut, tc.why) || !strings.HasSuffix(errOut, hint) {
+			t.Errorf("run(%q) = %d, stdout %q, stderr %q; want 1 and %q, then %q", tc.args, code, out, errOut, tc.why, hint)
 		}
 	}
 }
 
-// -h or --help before any -- prints the usage of the command and succeeds.
+// The arguments of a rejected command line are not echoed: a token pasted
+// in the wrong place must not land in the terminal's scrollback.
+func TestRunRejectsWithoutEcho(t *testing.T) {
+	setUp(t)
+
+	const pasted = "sk-ant-oat01-example"
+	_, out, errOut := runCapture("add", "work", pasted)
+	if strings.Contains(out+errOut, pasted) {
+		t.Errorf("the error shows the argument: %q", errOut)
+	}
+}
+
+// The help comes from cobra, for cc-login and for each command.
 func TestRunHelp(t *testing.T) {
 	setUp(t)
 
-	full := "usage: cc-login COMMAND [ARGS]\n\n"
-	for _, c := range cmds {
-		full += usageText[c] + "\n"
-	}
-
 	cases := []struct {
-		args   []string
-		stdout string
+		args []string
+		want string
 	}{
-		{[]string{"help"}, full},
-		{[]string{"-h"}, full},
-		{[]string{"--help"}, full},
-		{[]string{"help", "use"}, usage("use")},
-		{[]string{"-h", "use"}, usage("use")},
-		{[]string{"use", "-h"}, usage("use")},
-		{[]string{"use", "a", "b", "--help"}, usage("use")},
-		{[]string{"run", "a", "x", "-h", "--", "y"}, usage("run")},
+		{[]string{"--help"}, "Available Commands:"},
+		{[]string{"help"}, "Available Commands:"},
+		{[]string{"help", "use"}, "cc-login use NAME"},
+		{[]string{"use", "-h"}, "cc-login use NAME"},
+		{[]string{"add", "--help"}, "--sign-in"},
+		{[]string{"list", "-h"}, "--json"},
 	}
 
 	for _, tc := range cases {
 		code, out, errOut := runCapture(tc.args...)
-		if code != 0 || out != tc.stdout || errOut != "" {
-			t.Errorf("run(%q) = %d, stdout:\n%s\nstderr %q; want 0 and:\n%s", tc.args, code, out, errOut, tc.stdout)
+		if code != 0 || !strings.Contains(out, tc.want) || errOut != "" {
+			t.Errorf("run(%q) = %d, stdout %q, stderr %q; want 0 and %q", tc.args, code, out, errOut, tc.want)
 		}
 	}
 }
@@ -135,6 +117,7 @@ func TestRunNotPorted(t *testing.T) {
 		{"use", "work"},
 		{"run", "a", "--", "-h"},
 		{"add", "a", "--sign-in", "--", "--email", "x"},
+		{"add", "--api-key", "a"},
 		{"rename", "work", "home"},
 		{"remove", "work"},
 		{"renew", "work"},
@@ -157,7 +140,7 @@ func TestRunNotSetUp(t *testing.T) {
 	t.Setenv("CC_LOGIN_ROOT", t.TempDir())
 
 	code, _, errOut := runCapture("list", "--json")
-	if code != 1 || !strings.Contains(errOut, "not set up") {
+	if code != 1 || errOut != "cc-login: cc-login is not set up on this machine; set it up with the zsh cc-login\n" {
 		t.Errorf("list on a machine that is not set up = %d, %q; want 1", code, errOut)
 	}
 }
@@ -171,38 +154,41 @@ func TestCompletionScript(t *testing.T) {
 	}
 }
 
-// The completion offers what _cc_login_complete in cc-login.zsh offers.
+// The completion offers the login names where a command takes one, and the
+// options of add.
 func TestComplete(t *testing.T) {
 	setUp(t)
-	a := &app{store: store.New()}
-	root := a.command()
-	root.InitDefaultHelpCmd() // cobra adds the help command when it runs
 
 	cases := []struct {
-		cmd  string
 		args []string
-		want []string
+		want []string // among the completions
+		not  []string // not among them
 	}{
-		{"use", nil, []string{"work"}},
-		{"rename", nil, []string{"work"}},
-		{"rename", []string{"work"}, nil},
-		{"add", nil, nil},
-		{"add", []string{"a"}, []string{"--sign-in", "--api-key", "--oauth-token"}},
-		{"run", []string{"work"}, []string{"--"}},
-		{"run", []string{"work", "--"}, nil},
-		{"help", nil, cmds},
-		{"completion", nil, []string{"zsh"}},
+		{[]string{"use", ""}, []string{"work"}, nil},
+		{[]string{"rename", ""}, []string{"work"}, nil},
+		{[]string{"rename", "work", ""}, nil, []string{"work"}},
+		{[]string{"add", ""}, nil, []string{"work"}},
+		{[]string{"add", "a", "--"}, []string{"--sign-in", "--api-key", "--oauth-token"}, nil},
+		{[]string{""}, []string{"list", "use", "add", "run", "renew", "rename", "remove"}, nil},
 	}
 
 	for _, tc := range cases {
-		c, _, err := root.Find([]string{tc.cmd})
-		if err != nil || c.Name() != tc.cmd {
-			t.Fatalf("find %s = %v, %v", tc.cmd, c.Name(), err)
+		_, out, _ := runCapture(append([]string{"__complete"}, tc.args...)...)
+		got := map[string]bool{}
+		for _, line := range strings.Split(out, "\n") {
+			name, _, _ := strings.Cut(line, "\t")
+			got[name] = true
 		}
 
-		got, dir := a.complete(c, tc.args, "")
-		if !slices.Equal(got, tc.want) || dir != cobra.ShellCompDirectiveNoFileComp {
-			t.Errorf("complete %s %q = %q, %d; want %q", tc.cmd, tc.args, got, dir, tc.want)
+		for _, w := range tc.want {
+			if !got[w] {
+				t.Errorf("complete %q lacks %q:\n%s", tc.args, w, out)
+			}
+		}
+		for _, n := range tc.not {
+			if got[n] {
+				t.Errorf("complete %q offers %q:\n%s", tc.args, n, out)
+			}
 		}
 	}
 }
