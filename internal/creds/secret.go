@@ -38,31 +38,12 @@ func Secret(dir string, kind state.Kind) (string, error) {
 }
 
 // WriteSecret saves the API key or the token of the login in credentials
-// directory dir: a 0600 file, written to a temporary name and renamed, so
-// the old secret stays whole until the new one is.
+// directory dir in a 0600 file. The old secret stays whole until the new one
+// is (state.WriteAtomic).
 func WriteSecret(dir string, kind state.Kind, secret string) error {
 	name, err := file(kind)
 	if err != nil {
 		return err
 	}
-
-	tmp, err := os.CreateTemp(dir, "."+name+"-*") // 0600
-	if err != nil {
-		return err
-	}
-	defer func() { _ = os.Remove(tmp.Name()) }() // fails harmlessly after the rename
-
-	if _, err := tmp.WriteString(secret + "\n"); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-
-	return os.Rename(tmp.Name(), filepath.Join(dir, name))
+	return state.WriteAtomic(filepath.Join(dir, name), []byte(secret+"\n"))
 }

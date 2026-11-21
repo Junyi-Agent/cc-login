@@ -48,17 +48,18 @@ type State struct {
 	Logins  map[string]*Login `json:"logins"`            // by ID
 }
 
+// The files in a credentials directory that hold an API key or a token:
+// file names, not secrets.
+const (
+	APIKeyFile = "api-key"     //nolint:gosec // G101: a file name
+	TokenFile  = "oauth-token" //nolint:gosec // G101: a file name
+)
+
 // Version is the state.json format this code writes.
 const Version = 1
 
-// Errors of the store.
-var (
-	// ErrLegacy: the data root has the zsh version's layout and no state.json.
-	ErrLegacy = errors.New("the logins are in the zsh version's layout; convert them with: cc-login migrate")
-
-	// ErrNoLogin: no login has that name.
-	ErrNoLogin = errors.New("no such login")
-)
+// ErrNoLogin means no login has that name.
+var ErrNoLogin = errors.New("no such login")
 
 // Store is the data root.
 type Store struct {
@@ -90,14 +91,10 @@ func (s *Store) path() string { return filepath.Join(s.Root, "state.json") }
 // the Keychain item after its SHA-256.
 func (s *Store) Dir(id string) string { return filepath.Join(s.Root, ".dirs", id) }
 
-// Load reads state.json. A machine without one has no logins, unless the
-// data root has the zsh version's layout: then it is ErrLegacy.
+// Load reads state.json. A machine without one has no logins.
 func (s *Store) Load() (*State, error) {
 	b, err := os.ReadFile(s.path())
 	if errors.Is(err, os.ErrNotExist) {
-		if s.hasLegacy() {
-			return nil, ErrLegacy
-		}
 		return &State{Version: Version, Logins: map[string]*Login{}}, nil
 	}
 	if err != nil {
@@ -158,21 +155,25 @@ func (s *Store) lock() (func(), error) {
 	return func() { _ = f.Close() }, nil // closing releases the lock
 }
 
-// save writes st to a temporary file in the root and renames it over
-// state.json, so a reader sees the old or the new state, never a part.
+// save writes st to state.json.
 func (s *Store) save(st *State) error {
 	b, err := json.MarshalIndent(st, "", "  ")
 	if err != nil {
 		return err
 	}
+	return WriteAtomic(s.path(), append(b, '\n'))
+}
 
-	tmp, err := os.CreateTemp(s.Root, ".state-*.json") // 0600
+// WriteAtomic writes data to a 0600 temporary file next to path and renames
+// it over path, so a reader sees the old or the new content, never a part.
+func WriteAtomic(path string, data []byte) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+"-*") // 0600
 	if err != nil {
 		return err
 	}
 	defer func() { _ = os.Remove(tmp.Name()) }() // fails harmlessly after the rename
 
-	if _, err := tmp.Write(append(b, '\n')); err != nil {
+	if _, err := tmp.Write(data); err != nil {
 		_ = tmp.Close()
 		return err
 	}
@@ -184,7 +185,7 @@ func (s *Store) save(st *State) error {
 		return err
 	}
 
-	return os.Rename(tmp.Name(), s.path())
+	return os.Rename(tmp.Name(), path)
 }
 
 // nameRE is the form of a login name.

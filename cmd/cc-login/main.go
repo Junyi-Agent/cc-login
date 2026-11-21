@@ -23,7 +23,7 @@ type cli struct {
 	app      *app.App
 	out, err io.Writer
 	root     *cobra.Command
-	ran      bool // the command line passed the checks and the command ran
+	ran      bool // the command line passed cobra's checks: set in PersistentPreRunE
 
 	// exec replaces this process with a program; tests replace it.
 	exec func(path string, argv, env []string) error
@@ -72,15 +72,15 @@ func (c *cli) errf(format string, args ...any) {
 	_, _ = fmt.Fprintf(c.err, "cc-login: "+format+"\n", args...)
 }
 
-// list prints the logins: the table, or format for scripts.
-func (c *cli) list(ctx context.Context, format string) error {
+// list prints the logins: the table, or JSON for scripts.
+func (c *cli) list(ctx context.Context, asJSON bool) error {
 	views, err := c.app.List(ctx)
 	if err != nil {
 		return err
 	}
 
-	if format != "" {
-		return ui.Format(c.out, views, format)
+	if asJSON {
+		return ui.JSON(c.out, views)
 	}
 
 	opt := ui.Options{Now: c.app.Now()}
@@ -97,30 +97,4 @@ func (c *cli) list(ctx context.Context, format string) error {
 		c.errf("%s holds a sign-in that a claude run without cc-login wrote; move it into a login with: cc-login adopt NAME", stray)
 	}
 	return nil
-}
-
-// migrate converts the zsh version's data layout and says what it did.
-func (c *cli) migrate() error {
-	m, err := c.app.Migrate()
-	if err != nil {
-		return err
-	}
-
-	if m.Already {
-		_, err = fmt.Fprintln(c.out, "Nothing to do: state.json is there.")
-		return err
-	}
-
-	for _, n := range m.Notes {
-		c.errf("%s", n)
-	}
-
-	def := m.Default
-	if def == "" {
-		def = "none"
-	}
-	_, err = fmt.Fprintf(c.out, "Migrated %d logins (default: %s). The old links and records are in %s.\n"+
-		"The zsh cc-login cannot read the new layout: stop loading it in your shell.\n",
-		len(m.Logins), def, m.Backup)
-	return err
 }

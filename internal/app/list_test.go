@@ -11,21 +11,20 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Junyi-Agent/cc-login/internal/anthropic"
 	"github.com/Junyi-Agent/cc-login/internal/claude"
-	"github.com/Junyi-Agent/cc-login/internal/creds"
-	"github.com/Junyi-Agent/cc-login/internal/quota"
 	"github.com/Junyi-Agent/cc-login/internal/state"
 )
 
 var now = time.Date(2026, 11, 21, 12, 0, 0, 0, time.UTC)
 
 // fake is the outside world of a test: claude's answers by credentials
-// directory, access tokens by directory, quotas by access token.
+// directory, access token expiries by directory, quotas by access token.
 type fake struct {
 	mu       sync.Mutex
 	status   map[string]claude.Status
-	tokens   map[string]creds.Result
-	quotas   map[string]quota.Quota
+	tokens   map[string]time.Time
+	quotas   map[string]anthropic.Quota
 	statusTo map[string][]string // the env each AuthStatus got, by directory
 }
 
@@ -69,17 +68,17 @@ func newApp(t *testing.T, logins map[string]*state.Login, def string, f *fake) *
 			f.statusTo[filepath.Base(dir)] = env
 			return f.status[filepath.Base(dir)], nil
 		},
-		AccessToken: func(_ context.Context, dir string, _ time.Time) (string, creds.Result) {
-			res, ok := f.tokens[filepath.Base(dir)]
+		AccessToken: func(_ context.Context, dir string) (string, time.Time) {
+			exp, ok := f.tokens[filepath.Base(dir)]
 			if !ok {
-				return "", creds.None
+				return "", time.Time{}
 			}
-			return "access-" + filepath.Base(dir), res
+			return "access-" + filepath.Base(dir), exp
 		},
-		Usage: func(_ context.Context, tok string) (quota.Quota, error) {
+		Usage: func(_ context.Context, tok string) (anthropic.Quota, error) {
 			q, ok := f.quotas[tok]
 			if !ok {
-				return quota.Quota{}, errors.New("HTTP 500")
+				return anthropic.Quota{}, errors.New("HTTP 500")
 			}
 			return q, nil
 		},
@@ -89,7 +88,7 @@ func newApp(t *testing.T, logins map[string]*state.Login, def string, f *fake) *
 	}
 }
 
-func pct(n int) *int { return &n }
+func used(f float64) *anthropic.Window { return &anthropic.Window{Used: &f} }
 
 func TestList(t *testing.T) {
 	inDays := func(d int) *time.Time { t := now.Add(time.Duration(d) * 24 * time.Hour); return &t }
@@ -113,10 +112,14 @@ func TestList(t *testing.T) {
 			"g7": {SignedIn: true},
 			"h8": {SignedIn: true},
 		},
-		tokens: map[string]creds.Result{"a1": creds.OK, "b2": creds.OK, "g7": creds.Expired, "h8": creds.OK},
-		quotas: map[string]quota.Quota{
-			"access-a1": {FiveHour: quota.Window{Used: pct(30)}},
-			"access-b2": {SevenDay: quota.Window{Used: pct(90)}},
+		tokens: map[string]time.Time{
+			"a1": now.Add(time.Hour), "b2": now.Add(time.Hour), "g7": now.Add(-time.Hour), "h8": now.Add(time.Hour),
+			"e5": now.Add(time.Hour), // a token login's stored sign-in is not read
+		},
+		quotas: map[string]anthropic.Quota{
+			"access-a1": {FiveHour: used(30)},
+			"access-b2": {SevenDay: used(90)},
+			"access-e5": {FiveHour: used(10)},
 		},
 	}
 	a := newApp(t, logins, "a1", f)
@@ -141,23 +144,31 @@ func TestList(t *testing.T) {
 		name   string
 		status Status
 		quota  bool
-		gap    QuotaGap
+		err    string // "", "stale" or "failed"
 	}{
-		{"work", SignedIn, true, GapNone},
-		{"soon", Expiring, true, GapNone},
-		{"gone", SignedOut, false, GapNone},
-		{"old", Expired, false, GapNone},
-		{"ci", SignedIn, false, GapToken},
-		{"api", SignedIn, false, GapNoLogin},
-		{"stale", SignedIn, false, GapStale},
-		{"flaky", SignedIn, false, GapError},
+		{"work", SignedIn, true, ""},
+		{"soon", Expiring, true, ""},
+		{"gone", SignedOut, false, ""},
+		{"old", Expired, false, ""},
+		{"ci", SignedIn, false, ""},
+		{"api", SignedIn, false, ""},
+		{"stale", SignedIn, false, "stale"},
+		{"flaky", SignedIn, false, "failed"},
 	}
 
 	for _, tc := range cases {
 		v := byName[tc.name]
-		if v.Status != tc.status || v.HasQuota != tc.quota || v.QuotaGap != tc.gap {
-			t.Errorf("%s: status %v, quota %v, gap %v; want %v, %v, %v",
-				tc.name, v.Status, v.HasQuota, v.QuotaGap, tc.status, tc.quota, tc.gap)
+		err := ""
+		switch {
+		case errors.Is(v.QuotaErr, ErrStaleToken):
+			err = "stale"
+		case v.QuotaErr != nil:
+			err = "failed"
+		}
+
+		if v.Status != tc.status || (v.Quota != nil) != tc.quota || err != tc.err {
+			t.Errorf("%s: status %v, quota %v, error %v; want %v, %v, %q",
+				tc.name, v.Status, v.Quota != nil, v.QuotaErr, tc.status, tc.quota, tc.err)
 		}
 	}
 

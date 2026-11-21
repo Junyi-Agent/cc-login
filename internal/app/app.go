@@ -13,7 +13,6 @@ import (
 	"github.com/Junyi-Agent/cc-login/internal/anthropic"
 	"github.com/Junyi-Agent/cc-login/internal/claude"
 	"github.com/Junyi-Agent/cc-login/internal/creds"
-	"github.com/Junyi-Agent/cc-login/internal/quota"
 	"github.com/Junyi-Agent/cc-login/internal/state"
 )
 
@@ -29,8 +28,8 @@ type App struct {
 	SignIn      func(ctx context.Context, path string, env, args []string) error
 	CheckKey    func(ctx context.Context, key string) (anthropic.Verdict, int)
 	CheckToken  func(ctx context.Context, tok string) (anthropic.Verdict, string, int)
-	AccessToken func(ctx context.Context, dir string, now time.Time) (string, creds.Result)
-	Usage       func(ctx context.Context, accessToken string) (quota.Quota, error)
+	AccessToken func(ctx context.Context, dir string) (string, time.Time)
+	Usage       func(ctx context.Context, accessToken string) (anthropic.Quota, error)
 
 	Parallel int           // logins probed at once
 	Timeout  time.Duration // for probing one login
@@ -69,11 +68,4 @@ func (a *App) Names() []string {
 		return nil
 	}
 	return st.Names()
-}
-
-// Migrate converts the zsh version's data layout into state.json (ADR 0008).
-func (a *App) Migrate() (state.Migration, error) {
-	m, err := a.Store.Migrate(a.Now())
-	a.Log.Debug("migrate", "root", a.Store.Root, "already", m.Already, "logins", len(m.Logins), "backup", m.Backup, "err", err)
-	return m, err
 }

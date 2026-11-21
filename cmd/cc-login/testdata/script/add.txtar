@@ -15,8 +15,8 @@ stdout 'dir .*; key false; token true'
 stdin key
 exec cc-login add api --api-key
 stdout 'Make it the default with: cc-login use api'
-exec cc-login list --format '{{.Name}} {{.Kind}} {{.Account}}'
-stdout '^api api-key API key …wxyz$'
+exec cc-login list
+stdout '^  api +API key …wxyz +api '
 
 # A sign-in through claude auth login, options after --.
 exec cc-login add home --sign-in -- --email new@example.com
@@ -28,7 +28,7 @@ stdin token
 ! exec cc-login add ci
 stderr 'cc-login renew ci'
 ! exec cc-login add home --sign-in
-stderr 'login home is signed in'
+stderr 'login home exists'
 ! exec cc-login add bad --api-key
 stderr 'no input'
 ! exec cc-login add ci2 -- --email x

@@ -30,62 +30,45 @@ type credFile struct {
 	} `json:"claudeAiOauth"`
 }
 
-// ReadKeychain returns the password of the generic Keychain item service.
-// It is a variable so that tests and non-macOS systems can replace it.
-var ReadKeychain = func(ctx context.Context, service string) ([]byte, bool) {
+// readKeychain returns the password of the generic Keychain item service;
+// nil off macOS or when there is none.
+func readKeychain(ctx context.Context, service string) []byte {
 	if runtime.GOOS != "darwin" {
-		return nil, false
+		return nil
 	}
 
 	out, err := exec.CommandContext(ctx, "security", "find-generic-password", "-s", service, "-w").Output()
 	if err != nil {
-		return nil, false
+		return nil
 	}
-
-	return out, true
+	return out
 }
 
-// Result says why there is no usable access token.
-type Result int
+// AccessToken is the access token of the sign-in stored for credentials
+// directory dir, in .credentials.json or the Keychain, and when it expires;
+// "" when none is stored.
+func AccessToken(ctx context.Context, dir string) (string, time.Time) {
+	file, _ := os.ReadFile(filepath.Join(dir, ".credentials.json"))
+	return newest(file, readKeychain(ctx, KeychainService(dir)))
+}
 
-// The results of AccessToken.
-const (
-	OK      Result = iota // a valid access token
-	None                  // no sign-in stored, or no token in it
-	Expired               // the newest access token has expired
-)
+// newest is the access token in blobs that expires last, and its expiry. Both
+// the file and the Keychain can hold one; the later one is the current one.
+func newest(blobs ...[]byte) (string, time.Time) {
+	var tok string
+	var exp time.Time
 
-// AccessToken returns the access token of the sign-in stored in dir. When
-// both the file and the Keychain hold one, the one that expires later is the
-// current one. A token counts as expired 30 seconds before its expiry.
-func AccessToken(ctx context.Context, dir string, now time.Time) (string, Result) {
-	var blobs [][]byte
-	if b, err := os.ReadFile(filepath.Join(dir, ".credentials.json")); err == nil {
-		blobs = append(blobs, b)
-	}
-	if b, ok := ReadKeychain(ctx, KeychainService(dir)); ok {
-		blobs = append(blobs, b)
-	}
-
-	// The token that expires last.
-	var best string
-	var bestExp int64
 	for _, b := range blobs {
 		var c credFile
-		if json.Unmarshal(b, &c) != nil || c.ClaudeAiOauth == nil {
+		if json.Unmarshal(b, &c) != nil || c.ClaudeAiOauth == nil || c.ClaudeAiOauth.AccessToken == "" {
 			continue
 		}
-		exp := int64(c.ClaudeAiOauth.ExpiresAt / 1000)
-		if c.ClaudeAiOauth.AccessToken != "" && exp > bestExp {
-			best, bestExp = c.ClaudeAiOauth.AccessToken, exp
+
+		t := time.UnixMilli(int64(c.ClaudeAiOauth.ExpiresAt))
+		if tok == "" || t.After(exp) {
+			tok, exp = c.ClaudeAiOauth.AccessToken, t
 		}
 	}
 
-	if best == "" {
-		return "", None
-	}
-	if bestExp <= now.Unix()+30 {
-		return "", Expired
-	}
-	return best, OK
+	return tok, exp
 }

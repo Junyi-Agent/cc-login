@@ -1,6 +1,6 @@
 # cc-login (Go)
 
-一台机器上管理多个 Claude Code 登录，claude 由 cc-login 用 exec 启动。最初是 `cc-login.zsh` 的 Go 移植，现在独立设计，不再与 zsh 版兼容（2026-11-21 用户决定）。用法和进度见 [[README]]，设计见 `docs/adr/`（0006–0010）。
+一台机器上管理多个 Claude Code 登录，claude 由 cc-login 用 exec 启动。最初是 `cc-login.zsh` 的 Go 移植，现在独立设计，不再与 zsh 版兼容（2026-11-21 用户决定）。用法和进度见 [[README]]，设计见 `docs/adr/`（0006–0011）。
 
 ## 开发流程
 
@@ -52,6 +52,5 @@ pre-commit install
 审查（`/jy-repo-review`）不把下列行为当问题上报。
 
 - `.golangci.yml` 对 `internal/claude`、`internal/creds` 豁免 G204：运行 `claude` 和 `security` 的参数由 cc-login 自己拼，不经过 shell。
-- `migrate` 只认 `NAME -> .dirs/ID` 链接；凭据直接在 `ROOT/NAME/` 的旧式目录会让它报错退出，因为移动目录会让 login 掉登录（Keychain 条目名随路径变）。
 - `CC_LOGIN_API_URL` 是给测试用的设置：testscript 把它指向本地不存在的地址，保证测试不连网。
 - `git_guard.py` 和 `review_gate.py` 来自 `Junyi-Agent/skills`，`review_gate.py` 改了审查方向，并在远端为空时审查全部内容。

@@ -32,7 +32,7 @@ zsh 版的数据目录：`NAME -> .dirs/ID` 符号链接、`NAME.json` 记录、
   键是凭据目录的 ID；`name` 唯一，只允许 `[A-Za-z0-9][A-Za-z0-9._-]*`。`kind` 是 `sign-in`、`token`、`api-key`。
 - 凭据仍是文件：`.dirs/ID/api-key`、`.dirs/ID/oauth-token`（0600，目录 0700）；sign-in 的凭据由 Claude Code 自己存（macOS 的 Keychain，其他系统的 `.credentials.json`）。
 - 写 state.json：对 `ROOT/.lock` 加 `flock` 排他锁，读出、修改、写到同目录的临时文件、`fsync`、`rename` 覆盖。读不加锁（rename 是原子的）。
-- `cc-login migrate`：从旧布局（链接、`NAME.json`、`current`、`.pending`）生成 state.json；旧的链接和记录移到 `ROOT/.legacy-<日期>/`，不删除；state.json 已存在时什么都不做。没有 state.json 而有旧布局时，其他命令报错并提示先运行 `migrate`。
+- （已由 [0011](0011-simplify.md) 去掉）`cc-login migrate`：从旧布局（链接、`NAME.json`、`current`、`.pending`）生成 state.json；旧的链接和记录移到 `ROOT/.legacy-<日期>/`，不删除；state.json 已存在时什么都不做。没有 state.json 而有旧布局时，其他命令报错并提示先运行 `migrate`。
 - 改名只改 `name` 字段；删除 login 时先 `claude auth logout`，再删凭据目录和 state.json 里的条目。
 
 ## 后果
