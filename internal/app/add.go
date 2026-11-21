@@ -15,7 +15,7 @@ import (
 	"github.com/Junyi-Agent/cc-login/internal/state"
 )
 
-// Prompter asks the user. On a terminal Secret reads without echo and Line
+// Prompter asks the user. On a terminal Secret shows what is typed as * and Line
 // asks a question; without one, Secret reads a line of stdin and Line
 // answers "".
 type Prompter interface {
@@ -160,7 +160,7 @@ func (a *App) authenticate(ctx context.Context, id, name string, kind state.Kind
 // saveKey reads an API key, checks it with the API and saves it.
 func (a *App) saveKey(ctx context.Context, dir string, l *state.Login, p Prompter) error {
 	valid := validPrefix("sk-ant-")
-	key, err := p.Secret("API key for "+l.Name, "An Anthropic API key, sk-ant-...; it is not shown.", valid)
+	key, err := p.Secret("API key for "+l.Name, "An Anthropic API key, sk-ant-...; it shows as *.", valid)
 	if err != nil {
 		return err
 	}
@@ -193,7 +193,7 @@ func (a *App) saveKey(ctx context.Context, dir string, l *state.Login, p Prompte
 func (a *App) saveToken(ctx context.Context, dir string, l *state.Login, askAccount bool, p Prompter) error {
 	p.Note("In another terminal run: claude setup-token. A browser opens; choose the account of login " + l.Name + ", then paste the token it prints (sk-ant-oat...).")
 	valid := validPrefix("sk-ant-oat")
-	tok, err := p.Secret("Token for "+l.Name, "From claude setup-token; it is not shown.", valid)
+	tok, err := p.Secret("Token for "+l.Name, "From claude setup-token; it shows as *.", valid)
 	if err != nil {
 		return err
 	}

@@ -23,7 +23,7 @@ func (c *cli) prompter() *prompter { return &prompter{c: c, in: bufio.NewReader(
 
 func terminal() bool { return term.IsTerminal(int(os.Stdin.Fd())) }
 
-// Secret reads a key or a token without showing it.
+// Secret reads a key or a token, shown as * on a terminal.
 func (p *prompter) Secret(title, help string, valid func(string) error) (string, error) {
 	if !terminal() {
 		line, err := p.in.ReadString('\n')
@@ -37,11 +37,18 @@ func (p *prompter) Secret(title, help string, valid func(string) error) (string,
 	}
 
 	var v string
-	err := huh.NewInput().Title(title).Description(help).
+	err := secretInput(title, help, valid, &v).Run()
+	return strings.TrimSpace(v), err
+}
+
+// secretInput is the input box for a key or a token: each character typed
+// or pasted shows as *, so the user sees that the paste arrived and how long
+// it is, but not the value.
+func secretInput(title, help string, valid func(string) error, v *string) *huh.Input {
+	return huh.NewInput().Title(title).Description(help).
 		EchoMode(huh.EchoModePassword).
 		Validate(func(s string) error { return valid(strings.TrimSpace(s)) }).
-		Value(&v).Run()
-	return strings.TrimSpace(v), err
+		Value(v)
 }
 
 // Line asks a question whose answer may show; "" without a terminal.
