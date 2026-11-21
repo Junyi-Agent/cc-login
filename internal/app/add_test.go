@@ -187,6 +187,89 @@ func TestAddTokenProfile(t *testing.T) {
 	}
 }
 
+// ImportToken (ADR 0020) saves a token the user has: the profile is its
+// check. A good profile fills the login in; 401 saves nothing; any other
+// answer saves it as it is, with a note.
+func TestImportToken(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("good: org, plan and scopes", func(t *testing.T) {
+		a := addApp(t, map[string]*state.Login{}, "", &fake{status: map[string]claude.AuthInfo{}})
+
+		res, err := a.ImportToken(ctx, "old", &prompts{secrets: []string{goodToken}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !res.BecameDefault || !res.ExpiresAt.IsZero() || res.Account != "tok@example.com" {
+			t.Errorf("result = %+v", res)
+		}
+
+		id, l, err := load(t, a).ByName("old")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if l.Kind != state.Token || l.Org != "Example Org" || l.Plan != "team" || l.TokenExpiresAt != nil ||
+			strings.Join(l.Scopes, " ") != "user:inference user:profile" {
+			t.Errorf("login = %+v", l)
+		}
+
+		b, _ := os.ReadFile(filepath.Join(a.Store.Dir(id), creds.TokenFile))
+		if string(b) != goodToken+"\n" {
+			t.Error("the token file does not hold the token")
+		}
+	})
+
+	cases := []struct {
+		name    string
+		secret  string
+		profile error
+		saved   bool
+		note    string // in a note
+		errText string // in the error
+	}{
+		{name: "rejected", secret: "sk-ant-oat01-other-token", errText: "rejected the token"}, //nolint:gosec // G101: a fake
+		{name: "no profile scope", secret: goodToken, profile: anthropic.StatusError{Code: 403}, saved: true, note: "HTTP 403"},
+		{name: "no answer", secret: goodToken, profile: errors.New("no route"), saved: true, note: "no route"},
+		{name: "not a token", secret: goodKey, errText: "not a sk-ant-oat"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			a := addApp(t, map[string]*state.Login{}, "", &fake{status: map[string]claude.AuthInfo{}})
+			if tc.profile != nil {
+				a.Profile = func(context.Context, string) (anthropic.Profile, error) { return anthropic.Profile{}, tc.profile }
+			}
+			p := &prompts{secrets: []string{tc.secret}}
+
+			_, err := a.ImportToken(ctx, "old", p)
+			if (err == nil) != tc.saved || (err != nil && !strings.Contains(err.Error(), tc.errText)) {
+				t.Fatalf("err = %v; saved %v, want error with %q", err, tc.saved, tc.errText)
+			}
+
+			_, l, lookup := load(t, a).ByName("old")
+			if (lookup == nil) != tc.saved {
+				t.Fatalf("saved = %v, want %v", lookup == nil, tc.saved)
+			}
+			if tc.saved && (len(l.Scopes) != 0 || l.Org != "") {
+				t.Errorf("login = %+v; want no scopes and no org", l)
+			}
+			if tc.note != "" && !strings.Contains(strings.Join(p.notes, "\n"), tc.note) {
+				t.Errorf("notes %q; want %q", p.notes, tc.note)
+			}
+			if err != nil && strings.Contains(err.Error(), tc.secret) {
+				t.Error("the error holds the token")
+			}
+		})
+	}
+
+	t.Run("name taken", func(t *testing.T) {
+		a := addApp(t, map[string]*state.Login{"a1": {Name: "work", Kind: state.SignIn}}, "a1", &fake{status: map[string]claude.AuthInfo{}})
+		if _, err := a.ImportToken(ctx, "work", &prompts{secrets: []string{goodToken}}); err == nil {
+			t.Error("want an error")
+		}
+	})
+}
+
 // A name that exists cannot take a new login of any kind, a token on top
 // of a sign-in included.
 func TestAddExisting(t *testing.T) {

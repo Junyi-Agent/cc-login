@@ -36,3 +36,4 @@
 | [0017](0017-own-oauth.md) | token login 由 cc-login 自己走 OAuth，多要 user:profile | 采纳 |
 | [0018](0018-list-org-and-token-quota.md) | 无命令时给帮助；list 加组织列；token login 读配额和 profile | 已验证 |
 | [0019](0019-doctor.md) | cc-login doctor 检查配置：链接、shell 变量、login 文件和过期 | 已验证 |
+| [0020](0020-import-token.md) | add --import-token 导入已有的 OAuth token | 采纳 |

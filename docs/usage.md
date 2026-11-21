@@ -18,7 +18,7 @@ The short version is in [[README]]. `cc-login --help` and
 | `remove NAME` | `claude auth logout`, then deletes the login; asks first (`--yes` without a terminal) |
 | `version`, `--version` | the version and commit; `version` also says which claude cc-login runs and whether the `claude` link is in place; `--verbose` (or `CC_LOGIN_DEBUG=1`) logs what any command does on stderr, never keys or tokens |
 | `completion` | zsh, bash, fish and powershell completion: commands, options, login names |
-| `add NAME` | a new login: an OAuth token (the default, `--oauth-token`; see below), an API key (`--api-key`, checked with the API), or a sign-in (`--sign-in [-- OPTS]`, through `claude auth login`); the key or code is shown as `*` while typed; without a terminal it is a line of stdin |
+| `add NAME` | a new login: an OAuth token (the default, `--oauth-token`; see below), an API key (`--api-key`, checked with the API), a token you already have (`--import-token`, [ADR 0020](adr/0020-import-token.md); without `user:profile` it has no account, plan or quota, and its expiry is unknown), or a sign-in (`--sign-in [-- OPTS]`, through `claude auth login`); the key, token or code is shown as `*` while typed; without a terminal it is a line of stdin |
 | `renew NAME [-- OPTS]` | signs a login in again so it expires later; a new OAuth token for a token login |
 | `doctor` | checks the setup, offline: claude, the `claude` link, keys and tokens set in the shell, `state.json`, each login's files and expiry; prints what to do for each problem; exit 1 when something does not work ([ADR 0019](adr/0019-doctor.md)) |
 | `adopt NAME` | moves `~/.claude/.credentials.json`, written by a claude run without cc-login, into a new login (`list` says when there is one) |

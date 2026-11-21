@@ -200,7 +200,7 @@ func addApp(t *testing.T, logins map[string]*state.Login, def string, f *fake) *
 	}
 	a.Profile = func(_ context.Context, tok string) (anthropic.Profile, error) {
 		if tok != goodToken {
-			return anthropic.Profile{}, errors.New("HTTP 401")
+			return anthropic.Profile{}, anthropic.StatusError{Code: 401}
 		}
 		return anthropic.Profile{Email: "tok@example.com", Org: "Example Org", OrgType: "claude_team"}, nil
 	}

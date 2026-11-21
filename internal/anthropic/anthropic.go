@@ -43,6 +43,11 @@ func (w *Window) Left() (int, bool) {
 	return max(0, min(100, 100-int(math.Round(*w.Used)))), true
 }
 
+// StatusError is an HTTP status of 400 or more.
+type StatusError struct{ Code int }
+
+func (e StatusError) Error() string { return fmt.Sprintf("HTTP %d", e.Code) }
+
 // Quota is the 5-hour and the weekly window, as claude's /usage shows them;
 // nil for a window the plan does not have.
 type Quota struct {
@@ -70,7 +75,7 @@ func (c *Client) Usage(ctx context.Context, accessToken string) (Quota, error) {
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 400 {
-		return Quota{}, fmt.Errorf("HTTP %d", resp.StatusCode)
+		return Quota{}, StatusError{resp.StatusCode}
 	}
 
 	var q Quota
@@ -109,7 +114,7 @@ func (c *Client) Profile(ctx context.Context, accessToken string) (Profile, erro
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 400 {
-		return Profile{}, fmt.Errorf("HTTP %d", resp.StatusCode)
+		return Profile{}, StatusError{resp.StatusCode}
 	}
 
 	var body struct {
