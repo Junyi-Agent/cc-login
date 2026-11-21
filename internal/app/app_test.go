@@ -197,6 +197,12 @@ func addApp(t *testing.T, logins map[string]*state.Login, def string, f *fake) *
 		tok.Account.Email = "tok@example.com"
 		return tok, nil
 	}
+	a.Profile = func(_ context.Context, tok string) (anthropic.Profile, error) {
+		if tok != goodToken {
+			return anthropic.Profile{}, errors.New("HTTP 401")
+		}
+		return anthropic.Profile{Email: "tok@example.com", Org: "Example Org", OrgType: "claude_team"}, nil
+	}
 	f.login = func(env, _ []string) error {
 		id := filepath.Base(lookup(env, "CLAUDE_SECURESTORAGE_CONFIG_DIR"))
 		f.mu.Lock()

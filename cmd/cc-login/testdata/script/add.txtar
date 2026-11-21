@@ -21,7 +21,7 @@ stderr 'It is the default login\.'
 stderr 'saving it unchecked'
 ! stderr 'fake-wxyz'
 exec cc-login list
-stdout '^▸ api +API key …wxyz +api '
+stdout '^▸ api +API key …wxyz +- +api '
 exec cc-login run
 stdout 'dir .*; key true; token false'
 

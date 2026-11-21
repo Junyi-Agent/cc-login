@@ -56,7 +56,8 @@ type cell struct {
 const (
 	colMark = iota
 	colName
-	colAccount
+	colEmail
+	colOrg
 	colPlan
 	colFive
 	colWeek
@@ -65,7 +66,7 @@ const (
 	nCols
 )
 
-var headers = []string{"", "NAME", "ACCOUNT", "PLAN", "5H LEFT", "WEEK LEFT", "STATUS", "EXPIRES"}
+var headers = []string{"", "NAME", "EMAIL", "ORG", "PLAN", "5H LEFT", "WEEK LEFT", "STATUS", "EXPIRES"}
 
 // Table writes the table of logins and the notes under it; expiries and
 // resets count from now. Colors follow the terminal w is (none when w is
@@ -129,7 +130,8 @@ func draw(rows [][]cell, s styles) string {
 func viewRow(v app.View, s styles, now time.Time) []cell {
 	row := make([]cell, nCols)
 	row[colName] = cell{text: v.Name}
-	row[colAccount] = cell{text: cmp.Or(v.Account, "-")}
+	row[colEmail] = cell{text: cmp.Or(v.Account, "-")}
+	row[colOrg] = cell{text: cmp.Or(v.Org, "-")}
 	row[colPlan] = cell{text: cmp.Or(v.Plan, "-")}
 
 	if v.Default {

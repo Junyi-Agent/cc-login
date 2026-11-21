@@ -104,3 +104,37 @@ func TestNewBaseURL(t *testing.T) {
 		t.Errorf("BaseURL = %q", got)
 	}
 }
+
+func TestProfile(t *testing.T) {
+	c := serve(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/oauth/profile" || r.Header.Get("Authorization") != "Bearer good" ||
+			r.Header.Get("anthropic-beta") != "oauth-2025-04-20" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		_, _ = w.Write([]byte(`{"account":{"email":"me@example.com"},
+			"organization":{"name":"Example Org","organization_type":"claude_team"}}`))
+	})
+
+	p, err := c.Profile(context.Background(), "good")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Email != "me@example.com" || p.Org != "Example Org" || p.Plan() != "team" {
+		t.Errorf("profile = %+v, plan %q", p, p.Plan())
+	}
+
+	if _, err := c.Profile(context.Background(), "bad"); err == nil {
+		t.Error("401: want an error")
+	}
+}
+
+func TestProfilePlan(t *testing.T) {
+	cases := map[string]string{"claude_team": "team", "claude_max": "max", "claude_pro": "pro", "": ""}
+
+	for typ, want := range cases {
+		if got := (Profile{OrgType: typ}).Plan(); got != want {
+			t.Errorf("Plan(%q) = %q, want %q", typ, got, want)
+		}
+	}
+}

@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -155,6 +156,34 @@ func TestAddTokenSignIn(t *testing.T) {
 	}
 	if _, _, err := load(t, a).ByName("ci2"); err == nil {
 		t.Error("no code: the login was saved")
+	}
+}
+
+// A token login records the organization and the plan of its profile; when
+// the profile cannot be read it is saved anyway, and says so.
+func TestAddTokenProfile(t *testing.T) {
+	f := &fake{status: map[string]claude.AuthInfo{}}
+	a := addApp(t, map[string]*state.Login{}, "", f)
+
+	if _, err := a.Add(context.Background(), "ci", state.Token, nil, &prompts{secrets: []string{goodCode}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, l, _ := load(t, a).ByName("ci"); l.Org != "Example Org" || l.Plan != "team" {
+		t.Errorf("org %q, plan %q; want Example Org, team", l.Org, l.Plan)
+	}
+
+	a.Profile = func(context.Context, string) (anthropic.Profile, error) {
+		return anthropic.Profile{}, errors.New("HTTP 500")
+	}
+	p := &prompts{secrets: []string{goodCode}}
+	if _, err := a.Add(context.Background(), "ci2", state.Token, nil, p); err != nil {
+		t.Fatal(err)
+	}
+	if _, l, _ := load(t, a).ByName("ci2"); l.Org != "" || l.Plan != "" {
+		t.Errorf("org %q, plan %q; want none", l.Org, l.Plan)
+	}
+	if !strings.Contains(strings.Join(p.notes, "\n"), "Could not read the organization") {
+		t.Errorf("notes %q; want the profile warning", p.notes)
 	}
 }
 
