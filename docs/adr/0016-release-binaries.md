@@ -1,6 +1,6 @@
 # 0016 用 GitHub release 的二进制安装
 
-状态：采纳
+状态：已验证
 
 ## 背景
 
@@ -24,4 +24,7 @@ README 的安装方法是 `go install`，要求用户装 Go。`release.yml` 在�
 
 ## 验证
 
-（只由人类填写。状态改成「已验证」时填：验证人、日期、测了什么、结果。）
+验证人：Junyi
+日期：2026-11-22
+测了什么：推 v0.2.0 tag 后，用 install.sh 安装 release 二进制；cc-login version 显示 0.2.0；重做 claude 链接后 cc-login doctor 全部通过。
+结果：通过。
