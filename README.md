@@ -4,10 +4,14 @@ tags: [cc-login, golang, claude-code]
 
 # cc-login (Go)
 
-A Go port of `cc-login.zsh`: several Claude Code logins on one machine, and the
-default login that new `claude` launches use. It reads and writes the same data
-directory as the zsh version (`$XDG_DATA_HOME/claude-logins`, or
-`~/.local/share/claude-logins`), so the two can run side by side during the port.
+Several Claude Code logins on one machine, and the default login that `claude`
+uses. cc-login launches claude itself (`cc-login run`, or a `claude` link to
+cc-login), with only that login's credentials in claude's environment.
+
+It began as a port of `cc-login.zsh` and is now its own design: a `state.json`
+data layout, claude launched by exec. The redesign is in progress; until it is
+done, the zsh version keeps working on the old layout. Decisions are in
+[docs/adr](docs/adr/README.md) (0006–0010).
 
 ## Status
 
@@ -106,15 +110,14 @@ Workflow rules (worktrees, the pre-push review gate, ADRs) are in
 
 ## Plan
 
-1. ~~`list`~~, ~~`list --json`~~
-2. ~~cobra: help, argument checks and completion~~
-   ([ADR 0006](docs/adr/0006-cobra-and-bubbletea.md))
-3. `use`, `run` (`syscall.Exec` into claude), `rename`, `remove`, and the
-   check / adopt flow, with `--yes` and a non-terminal failure instead of a
-   prompt, tested on a temporary data directory
-4. `add` / `renew`: no-echo reads, key and token checks, the
-   `claude auth login` code relay
-5. the zsh shim (ADR 0004, 0005)
-6. `cc-login tui`: bubbletea (ADR 0006)
-7. `cc-login statusline` and `cc-login quota-refresh`, replacing the Python
-   status line and quota refresh scripts, so the login layout lives in one place
+1. ~~`list`, `list --json`~~
+2. ~~cobra: help, argument checks and completion~~ ([ADR 0006](docs/adr/0006-cobra-and-bubbletea.md))
+3. the new structure: `state.json` and `cc-login migrate`, `internal/app`,
+   typed status, lipgloss table, testscript ([ADR 0008](docs/adr/0008-state-json-layout.md),
+   [ADR 0009](docs/adr/0009-code-structure.md))
+4. `use`, `rename`, `remove`, `run`, and the `claude` link
+   ([ADR 0007](docs/adr/0007-launch-claude-by-exec.md))
+5. `add`, `renew`, `adopt`
+6. `statusline`, `quota-refresh`, `version`, `list --format`, debug log
+   ([ADR 0010](docs/adr/0010-statusline-and-quota-refresh.md))
+7. `cc-login tui` (ADR 0006)

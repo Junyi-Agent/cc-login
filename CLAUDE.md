@@ -1,6 +1,6 @@
 # cc-login (Go)
 
-`cc-login.zsh` 的 Go 移植：一台机器上管理多个 Claude Code 登录。两个版本共用同一个数据目录（`$XDG_DATA_HOME/claude-logins`），移植期间并存。用法、目录结构和移植进度见 [[README]]。
+一台机器上管理多个 Claude Code 登录，claude 由 cc-login 用 exec 启动。最初是 `cc-login.zsh` 的 Go 移植，现在独立设计，不再与 zsh 版兼容（2026-11-21 用户决定）。用法和进度见 [[README]]，设计见 `docs/adr/`（0006–0010）。
 
 ## 开发流程
 
@@ -15,7 +15,7 @@
 
 ## push 审查门禁
 
-push 时 pre-push hook 跑 `scripts/review_gate.py`：3 个 Claude 分别从正确性、与 zsh 版行为一致、凭据安全与流程审查 `origin/main` 之后的改动，≥2 个同意才放行。被拒时按输出里的 blocking issues 改完再 push。需要本机装好并登录 `claude` CLI。见 [[docs/adr/0002-pre-push-review-gate]]。
+push 时 pre-push hook 跑 `scripts/review_gate.py`：3 个 Claude 分别从正确性、是否符合 ADR 和文档、凭据安全与流程审查 `origin/main` 之后的改动，≥2 个同意才放行。被拒时按输出里的 blocking issues 改完再 push。需要本机装好并登录 `claude` CLI：门禁按 PATH 调用 `claude`，所以默认 login 要能用（装了 `claude -> cc-login` 链接之后自动满足；没装时，agent 的非交互 shell 没有登录环境，要在带默认 login 环境的进程里 push）。见 [[docs/adr/0002-pre-push-review-gate]]。
 
 ## 本地检查
 
@@ -28,13 +28,13 @@ pre-commit install
 
 提交前会跑：YAML/JSON 校验、`golangci-lint fmt`（gofmt + goimports）、`golangci-lint run`（规则见 `.golangci.yml`）、`go mod tidy -diff`、`go test -race ./...`，改到对应文件时还跑 git guard 和审查门禁的单元测试。手动全量跑：`pre-commit run --all-files`。CI（`.github/workflows/ci.yml`）在 Ubuntu 和 macOS 上跑同一套配置。
 
-## 移植规则
+## 设计规则
 
-- 移植的命令要和 zsh 版逐字节一致：命令的输出（含颜色和窄终端下的截断）、退出码、写的文件、数据目录布局。验收方法：设 `CC_LOGIN_ZSH` 为 `cc-login.zsh` 的路径，跑 README 里的 `diff` 命令。配额是实时数据，相邻两次请求之间可能变，不一致时再跑一次确认。
-- help、用法和参数报错由 cobra 生成，不要求和 zsh 版一致（用户 2026-11-21 决定，见 [[docs/adr/0006-cobra-and-bubbletea]]）。选项注册给 cobra，参数检查用 cobra 的 `Args`，不手写解析。
-- Go 版新增、zsh 版没有的功能（如 `list --json`）写进 README 的状态表。
-- zstyle 设置由 zsh shim 转成环境变量（`CC_LOGIN_THEME`、`CC_LOGIN_QUOTA_CACHE`），Go 不读 zstyle。
-- 不改变凭据目录的路径字符串：Keychain 条目名是这个路径的 SHA-256 前 8 位，路径一变，login 就显示未登录。
+- 数据布局以 [[docs/adr/0008-state-json-layout]] 为准：元数据只在 `state.json`，写之前加锁、原子替换；不移动、不改名凭据目录（Keychain 条目名是目录路径的 SHA-256 前 8 位，路径一变 login 就未登录）。
+- claude 只经 `cc-login run` 或 `claude` 链接用 exec 启动（[[docs/adr/0007-launch-claude-by-exec]]），不往 shell 导出凭据。
+- 分层见 [[docs/adr/0009-code-structure]]：业务逻辑在 `internal/app`，不写 stdout、不依赖 cobra；`cmd/cc-login` 只做命令行。
+- help、用法和参数报错由 cobra 生成（[[docs/adr/0006-cobra-and-bubbletea]]）。选项注册给 cobra，参数检查用 cobra 的 `Args`，不手写解析。
+- 设置只来自环境变量（README 的设置表），新增时写进 README。
 
 ## 安全
 

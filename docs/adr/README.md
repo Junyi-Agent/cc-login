@@ -20,6 +20,10 @@
 | [0001](0001-worktree-and-git-guard.md) | 在仓库外的 worktree 开发，用 PreToolUse hook 强制 | 采纳 |
 | [0002](0002-pre-push-review-gate.md) | push 前 3 个 Claude 审查，≥2 同意才放行 | 采纳 |
 | [0003](0003-merge-requires-green-ci.md) | 合并 PR 前要求 CI 检查全部通过 | 采纳 |
-| [0004](0004-zsh-shim-exports-env.md) | 保留一个 zsh shim，在 preexec 导出默认 login 的环境变量 | 提议 |
-| [0005](0005-zstyle-to-env.md) | zstyle 设置改由环境变量传给 Go | 提议 |
+| [0004](0004-zsh-shim-exports-env.md) | 保留一个 zsh shim，在 preexec 导出默认 login 的环境变量 | 已取代（见 0007） |
+| [0005](0005-zstyle-to-env.md) | zstyle 设置改由环境变量传给 Go | 已取代（见 0009） |
 | [0006](0006-cobra-and-bubbletea.md) | 命令行解析用 cobra，交互界面用 bubbletea | 采纳 |
+| [0007](0007-launch-claude-by-exec.md) | claude 由 cc-login 用 exec 启动，不再往 shell 导出凭据 | 采纳 |
+| [0008](0008-state-json-layout.md) | 数据布局：一个 state.json 加按 ID 存放的凭据目录 | 采纳 |
+| [0009](0009-code-structure.md) | 代码结构：app 层、类型、lipgloss 表格、testscript | 采纳 |
+| [0010](0010-statusline-and-quota-refresh.md) | statusline 和 quota-refresh 成为 cc-login 的子命令 | 采纳 |
