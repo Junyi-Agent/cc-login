@@ -104,7 +104,7 @@ func Table(w io.Writer, views []app.View, opt Options) error {
 		return err
 	}
 
-	return notes(w, views, s, opt.Now)
+	return notes(w, views, s)
 }
 
 // fit draws the table within width: without the date column first, then
@@ -225,29 +225,24 @@ func statusText(v app.View) string {
 }
 
 // quotaCells are the 5-hour and weekly cells: the percent left and when the
-// window resets; a cached quota is starred, an unknown one is "?".
+// window resets; "?" when the request failed or the access token expired.
 func quotaCells(v app.View, s styles) (cell, cell) {
 	switch {
-	case v.QuotaSource == app.QuotaNone && (v.QuotaGap == app.GapStale || v.QuotaGap == app.GapError):
+	case v.HasQuota:
+		return windowCell(v.Quota.FiveHour, "15:04", s), windowCell(v.Quota.SevenDay, "01-02", s)
+	case v.QuotaGap == app.GapStale || v.QuotaGap == app.GapError:
 		return cell{text: "?"}, cell{text: "?"}
-	case v.QuotaSource == app.QuotaNone:
-		return cell{text: "-"}, cell{text: "-"}
 	}
-
-	star := ""
-	if v.QuotaSource == app.QuotaCache {
-		star = "*"
-	}
-	return windowCell(v.Quota.FiveHour, star, "15:04", s), windowCell(v.Quota.SevenDay, star, "01-02", s)
+	return cell{text: "-"}, cell{text: "-"}
 }
 
 // windowCell is one quota window: red at 20% left or less, yellow at 50%.
-func windowCell(w quota.Window, star, layout string, s styles) cell {
+func windowCell(w quota.Window, layout string, s styles) cell {
 	if w.Used == nil {
 		return cell{text: "-"}
 	}
 
-	c := cell{text: fmt.Sprintf("%d%%%s", w.Left(), star)}
+	c := cell{text: fmt.Sprintf("%d%%", w.Left())}
 	if !w.ResetsAt.IsZero() {
 		c.text += " " + w.ResetsAt.Local().Format(layout)
 	}
@@ -319,9 +314,9 @@ func truncate(s string, n int) string {
 }
 
 // notes writes the lines under the table: what to do about logins that
-// need it, and where unknown or cached quotas come from.
-func notes(w io.Writer, views []app.View, s styles, now time.Time) error {
-	var renew, stale, failed, token, cached []string
+// need it, and why a quota is unknown.
+func notes(w io.Writer, views []app.View, s styles) error {
+	var renew, stale, failed, token []string
 	hasDefault := false
 
 	for _, v := range views {
@@ -330,15 +325,14 @@ func notes(w io.Writer, views []app.View, s styles, now time.Time) error {
 			renew = append(renew, v.Name)
 		}
 
-		switch {
-		case v.QuotaSource == app.QuotaCache:
-			cached = append(cached, v.Name+cachedAt(v.CachedAt, now))
-		case v.QuotaGap == app.GapStale:
+		switch v.QuotaGap {
+		case app.GapStale:
 			stale = append(stale, v.Name)
-		case v.QuotaGap == app.GapError:
+		case app.GapError:
 			failed = append(failed, v.Name)
-		case v.QuotaGap == app.GapToken:
+		case app.GapToken:
 			token = append(token, v.Name)
+		case app.GapNone, app.GapNoLogin:
 		}
 	}
 
@@ -356,9 +350,6 @@ func notes(w io.Writer, views []app.View, s styles, now time.Time) error {
 	if len(failed) > 0 {
 		lines = append(lines, s.dim.Render("Quota request failed for "+strings.Join(failed, ", ")))
 	}
-	if len(cached) > 0 {
-		lines = append(lines, s.dim.Render("* the quota as claude last saw it (quota cache): "+strings.Join(cached, ", ")))
-	}
 	if len(token) > 0 {
 		lines = append(lines, s.dim.Render("Quota unknown for "+strings.Join(token, ", ")+": a setup-token token cannot read it; see it in claude with")+" /usage")
 	}
@@ -371,17 +362,4 @@ func notes(w io.Writer, views []app.View, s styles, now time.Time) error {
 	}
 	_, err := fmt.Fprintf(w, "\n  %s\n", strings.Join(lines, "\n  "))
 	return err
-}
-
-// cachedAt is " 14:05", or " 11-20 14:05" a day or more ago; "" when unknown.
-func cachedAt(at, now time.Time) string {
-	if at.IsZero() {
-		return ""
-	}
-
-	layout := "15:04"
-	if now.Sub(at) >= 24*time.Hour {
-		layout = "01-02 15:04"
-	}
-	return " " + at.Local().Format(layout)
 }

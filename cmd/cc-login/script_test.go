@@ -25,7 +25,6 @@ func TestScripts(t *testing.T) {
 		Dir: "testdata/script",
 		Setup: func(env *testscript.Env) error {
 			env.Setenv("CC_LOGIN_ROOT", filepath.Join(env.WorkDir, "root"))
-			env.Setenv("CC_LOGIN_QUOTA_CACHE", filepath.Join(env.WorkDir, "quota.json"))
 			env.Setenv("CC_LOGIN_API_URL", "http://127.0.0.1:1") // no network in tests
 			env.Setenv("NO_COLOR", "1")
 

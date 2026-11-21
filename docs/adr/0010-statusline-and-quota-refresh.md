@@ -1,31 +1,29 @@
-# 0010 状态栏和定时刷新配额改由 cc-login 做
+# 0010 cc-login 不做状态栏和定时刷新配额
 
-状态：提议
+状态：采纳
 
 ## 背景
 
-配额有两条来源，现在都由本机的 Python 脚本完成，不在这个仓库里：
+配额有两条来源，由本机的 Python 脚本完成，不在这个仓库里：
 
-- 状态栏脚本（Claude Code 的 `statusLine` 命令）：从 stdin 读 Claude Code 给的 `rate_limits`，写配额缓存（按 `accountUuid/orgUuid` 和 `dir:ID` 两个键，`dir:ID` 带写入时间），输出一行 `Claude | 5h: 30%  7d: 50%`（没有新数据时用缓存，带 `*`），再在后台进程里把配额作为 OTLP 指标上报（带账号、org 等属性），收集端在本机或 `OTEL_EXPORTER_OTLP_*` 指定的地址。
-- 定时刷新（launchd，每 5 分钟）：给 token login（以及显式开启的 sign-in login）各跑一次最小的 `claude -p`，从 stream-json 的 `rate_limit_event` 取配额，交给状态栏脚本写缓存和上报。默认不探测 sign-in login：跑一次 claude 可能刷新它的 token，刷新会让别处同一份 sign-in 失效。
+- 状态栏脚本（Claude Code 的 `statusLine` 命令）：从 stdin 读 Claude Code 给的 `rate_limits`，写配额缓存，输出一行配额，在后台把配额作为 OTLP 指标上报。
+- 定时刷新（launchd）：给 token login 跑最小的 `claude -p`，取配额交给状态栏脚本写缓存和上报。
 
-两个脚本都按 zsh 版的布局找 login（`NAME -> .dirs/ID` 链接、`NAME.json` 记录）。`cc-login migrate`（0008）之后链接和记录移走，定时刷新找不到任何 login，状态栏读不到 token login 的账号。
+两个脚本都按 zsh 版的布局找 login，`cc-login migrate`（0008）之后找不到 login。`cc-login list` 原来在拿不到实时配额时读状态栏脚本写的缓存（`~/.claude/quota-last.json`，`CC_LOGIN_QUOTA_CACHE`），带 `*` 显示。
 
-0010 最初写成“statusline 只读缓存、不发网络请求”，与上面的事实不符，已改回「提议」，待用户决定。
-
-## 可选方案
-
-1. 全部移进 Go：`cc-login statusline`（读 stdin、写缓存、输出一行、上报 OTLP）和 `cc-login quota-refresh`（探测、写缓存、上报）。OTLP 用 `go.opentelemetry.io/otel` 的 SDK 和 otlpmetrichttp 导出器，依赖增加较多；指标名、属性、`service.instance.id` 要与现在一致，否则仪表盘断档。
-2. Go 只接管找 login 的部分：给 `list --format` 加上 ID 和凭据目录字段，Python 脚本改为调用 `cc-login list --format json` 找 login、读账号；缓存和 OTLP 留在 Python。
-3. 先不动：迁移前不运行 `cc-login migrate`，或迁移后让 Python 脚本读 `.legacy-<时间>/` 里的旧链接。
+最初的 0010 打算把这两个功能做成 cc-login 的子命令。用户 2026-11-21 决定不做，并从 Go 里彻底去掉相关部分。
 
 ## 决策
 
-（待用户选择。）
+- cc-login 不提供状态栏和定时刷新配额的命令，也不上报指标。
+- `list` 只显示实时配额（用 sign-in 的 access token 请求 `api/oauth/usage`）；拿不到时显示 `-` 或 `?`，脚注说明原因。不再读配额缓存，`CC_LOGIN_QUOTA_CACHE` 和 JSON 的 `quota_source`、`cached_at` 字段一并去掉。
+- 本机的 Python 脚本、launchd 任务和 Claude Code 的 `statusLine` 设置不属于这个仓库，由用户自己处理。
 
 ## 后果
 
-（随决策填写。）
+- token login 和 API key login 在 `list` 里没有配额（token 读不到，key 没有订阅配额）；sign-in 的 access token 过期时显示 `?`，用这个 login 跑一次 claude 会刷新它。
+- 代码里不再有缓存格式和缓存路径，`internal/quota` 只剩配额的类型。
+- 两个 Python 脚本在迁移后找不到 login；要继续用，得由用户改成读 `state.json`（或调用 `cc-login list --format json`）。
 
 ## 验证
 

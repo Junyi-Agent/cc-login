@@ -31,7 +31,6 @@ type App struct {
 	CheckToken  func(ctx context.Context, tok string) (anthropic.Verdict, string, int)
 	AccessToken func(ctx context.Context, dir string, now time.Time) (string, creds.Result)
 	Usage       func(ctx context.Context, accessToken string) (quota.Quota, error)
-	QuotaCache  string
 
 	Parallel int           // logins probed at once
 	Timeout  time.Duration // for probing one login
@@ -56,7 +55,6 @@ func New() *App {
 		CheckToken:  api.CheckToken,
 		AccessToken: creds.AccessToken,
 		Usage:       api.Usage,
-		QuotaCache:  quota.CachePath(),
 		Parallel:    8,
 		Timeout:     15 * time.Second,
 		Log:         slog.New(slog.DiscardHandler),

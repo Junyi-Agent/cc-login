@@ -12,14 +12,14 @@
   - `internal/state`：state.json 的读写、锁、迁移（0008）。
   - `internal/claude`：找 claude、拼环境、`auth status` / `auth login` / `setup-token` / `auth logout`。
   - `internal/anthropic`：API 调用（检查 key 和 token、配额）。
-  - `internal/quota`：配额缓存。
+  - `internal/quota`：配额的类型（0010 之后不再有缓存）。
   - `internal/app`：每个命令一个函数（`List`、`Use`、`Add`、`Run`、`Rename`、`Remove`、`Migrate`…），参数进、结果或带类型的错误出（`ErrNotSetUp`、`ErrNoLogin`…），不写 stdout、不依赖 cobra。外部调用（claude、HTTP、钥匙串读取、时钟）通过结构体字段注入。
   - `internal/ui`：表格、JSON、提问；`cmd/cc-login` 只做 cobra 和输出。TUI 也调用 `internal/app`。
 - 类型：login 类型用 `Kind` 枚举，状态用 `Status` 枚举，时间用 `time.Time`；表格和 JSON 从同一个视图模型生成。
 - 表格用 `charmbracelet/lipgloss` 的 `table`；颜色由 lipgloss/termenv 判断（`NO_COLOR`、非终端、深浅背景），`CC_LOGIN_THEME` 可覆盖。
 - 并发：`errgroup.SetLimit` 限并发，每个 login 单独超时；`signal.NotifyContext` 让 Ctrl-C 取消正在跑的子进程和请求。
 - 测试：命令行端到端用 `rogpeppe/go-internal/testscript`（`testdata/script/*.txtar`），claude 和 API 用测试里的假程序和 `httptest` 代替；表格输出用 `testdata/*.golden`，`go test -update` 重新生成。
-- 设置只来自环境变量（`CC_LOGIN_ROOT`、`CC_LOGIN_THEME`、`CC_LOGIN_QUOTA_CACHE`、`CC_LOGIN_CLAUDE`、`NO_COLOR`），取代 0005。
+- 设置只来自环境变量（`CC_LOGIN_ROOT`、`CC_LOGIN_THEME`、`CC_LOGIN_CLAUDE`、`NO_COLOR`），取代 0005。
 - 调试日志用 `log/slog` 写 stderr，`--verbose` 或 `CC_LOGIN_DEBUG=1` 打开；日志不记 key、token 和它们所在的环境变量。
 - `cc-login version` 从 `debug.ReadBuildInfo` 取版本；`list --format json|tsv|<Go 模板>` 给脚本用（`--json` 保留为 `--format json` 的简写）。
 

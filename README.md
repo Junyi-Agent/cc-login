@@ -95,15 +95,15 @@ directory. See [ADR 0008](docs/adr/0008-state-json-layout.md).
     "plan": "team",
     "expires_at": "2026-12-21T12:00:00Z",
     "five_hour": {"left_percent": 70, "resets_at": "2026-11-21T15:00:00Z"},
-    "seven_day": {"left_percent": 15, "resets_at": "2026-11-23T14:00:00Z"},
-    "quota_source": "live"
+    "seven_day": {"left_percent": 15, "resets_at": "2026-11-23T14:00:00Z"}
   }
 ]
 ```
 
 `kind` is `sign-in`, `token` or `api-key`; `status` is `signed-in`,
-`expiring` (within a week), `expired` or `signed-out`; `quota_source` is
-`live`, `cache` (then `cached_at` is set) or `null`. Unknown values are `null`.
+`expiring` (within a week), `expired` or `signed-out`. The quota is the live
+one, `null` when the API did not return it (no sign-in, an expired access
+token, a token or API key login); other unknown values are `null` too.
 `--format tsv` prints name, default, kind, status, account, plan, expires_at
 and the percent left of the two windows; `--format '{{.Name}}'` applies a Go
 template to each login (the fields of the JSON object, in Go names).
@@ -114,7 +114,6 @@ template to each login (the fields of the JSON object, in Go names).
 |---|---|
 | `CC_LOGIN_ROOT` | the data directory |
 | `CC_LOGIN_THEME` | `light` or `dark`: overrides the terminal background lipgloss detects |
-| `CC_LOGIN_QUOTA_CACHE` | the quota cache file (default `~/.claude/quota-last.json`) |
 | `CC_LOGIN_CLAUDE` | the claude to run, instead of the first `claude` in `PATH` |
 | `CC_LOGIN_API_URL` | the Anthropic API (tests point it at a local server) |
 | `CC_LOGIN_DEBUG` | `1`: the debug log, as `--verbose` |
@@ -156,7 +155,7 @@ ADRs) are in [CLAUDE.md](CLAUDE.md); decisions in [docs/adr](docs/adr/README.md)
 | `internal/claude` | find claude, the environment of one login, `claude auth status` |
 | `internal/creds` | a login's key or token file; a sign-in's access token from `.credentials.json` or the Keychain |
 | `internal/anthropic` | the Anthropic API: the plan quota |
-| `internal/quota` | quota windows and the quota cache |
+| `internal/quota` | quota windows |
 | `internal/app` | one function per command; no output, no cobra |
 | `internal/ui` | the table (lipgloss), JSON, TSV and template output |
 | `cmd/cc-login` | the command line (cobra) |
@@ -171,8 +170,6 @@ ADRs) are in [CLAUDE.md](CLAUDE.md); decisions in [docs/adr](docs/adr/README.md)
 4. ~~`use`, `rename`, `remove`, `run`, and the `claude` link~~
    ([ADR 0007](docs/adr/0007-launch-claude-by-exec.md))
 5. ~~`add`, `renew`, `adopt`~~
-6. ~~`version`, debug log~~; the status line and the quota refresh wait for a
-   decision ([ADR 0010](docs/adr/0010-statusline-and-quota-refresh.md)): the
-   local scripts that do them read the zsh layout, so they stop finding logins
-   after `cc-login migrate`
+6. ~~`version`, debug log~~. No status line or quota refresh: cc-login does
+   not do them ([ADR 0010](docs/adr/0010-statusline-and-quota-refresh.md))
 7. `cc-login tui` (ADR 0006)

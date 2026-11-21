@@ -27,7 +27,7 @@ func views() []app.View {
 	return []app.View{
 		{
 			Name: "work", Default: true, Kind: state.SignIn, Account: "me@example.com", Plan: "team",
-			Status: app.SignedIn, ExpiresAt: at(30 * 24), QuotaSource: app.QuotaLive,
+			Status: app.SignedIn, ExpiresAt: at(30 * 24), HasQuota: true,
 			Quota: quota.Quota{
 				FiveHour: quota.Window{Used: pct(30), ResetsAt: at(3)},
 				SevenDay: quota.Window{Used: pct(85), ResetsAt: at(50)},
@@ -35,7 +35,7 @@ func views() []app.View {
 		},
 		{
 			Name: "soon", Kind: state.SignIn, Account: "a-long-account-name@example.com", Plan: "max",
-			Status: app.Expiring, ExpiresAt: at(30), QuotaSource: app.QuotaCache, CachedAt: at(-2),
+			Status: app.Expiring, ExpiresAt: at(30), HasQuota: true,
 			Quota: quota.Quota{FiveHour: quota.Window{Used: pct(60)}},
 		},
 		{Name: "old", Kind: state.SignIn, Status: app.Expired, ExpiresAt: at(-5)},
@@ -125,13 +125,13 @@ func TestFormatJSON(t *testing.T) {
 	}
 
 	work, ci := got[0], got[4]
-	if work.Status != "signed-in" || work.Kind != "sign-in" || !work.Default || *work.QuotaSource != "live" {
+	if work.Status != "signed-in" || work.Kind != "sign-in" || !work.Default {
 		t.Errorf("work = %+v", work)
 	}
 	if work.FiveHour.LeftPercent != 70 || work.SevenDay.LeftPercent != 15 {
 		t.Errorf("work quota = %+v %+v", work.FiveHour, work.SevenDay)
 	}
-	if ci.Kind != "token" || ci.FiveHour != nil || ci.QuotaSource != nil || ci.Plan != nil {
+	if ci.Kind != "token" || ci.FiveHour != nil || ci.Plan != nil {
 		t.Errorf("ci = %+v", ci)
 	}
 }

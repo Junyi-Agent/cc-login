@@ -20,19 +20,18 @@ type Window struct {
 }
 
 // Login is one login in the machine-readable forms (list --format). Times
-// are RFC 3339; unknown values are null.
+// are RFC 3339; unknown values are null, and so is the quota when the API
+// did not return it.
 type Login struct {
-	Name        string     `json:"name"`
-	Default     bool       `json:"default"`
-	Kind        string     `json:"kind"`   // sign-in, token, api-key
-	Status      string     `json:"status"` // signed-in, expiring, expired, signed-out
-	Account     *string    `json:"account"`
-	Plan        *string    `json:"plan"`
-	ExpiresAt   *time.Time `json:"expires_at"`
-	FiveHour    *Window    `json:"five_hour"`
-	SevenDay    *Window    `json:"seven_day"`
-	QuotaSource *string    `json:"quota_source"` // live, cache
-	CachedAt    *time.Time `json:"cached_at,omitempty"`
+	Name      string     `json:"name"`
+	Default   bool       `json:"default"`
+	Kind      string     `json:"kind"`   // sign-in, token, api-key
+	Status    string     `json:"status"` // signed-in, expiring, expired, signed-out
+	Account   *string    `json:"account"`
+	Plan      *string    `json:"plan"`
+	ExpiresAt *time.Time `json:"expires_at"`
+	FiveHour  *Window    `json:"five_hour"`
+	SevenDay  *Window    `json:"seven_day"`
 }
 
 // Logins converts the views for the machine-readable forms.
@@ -50,13 +49,7 @@ func login(v app.View) Login {
 		Account: strPtr(v.Account), Plan: strPtr(v.Plan), ExpiresAt: timePtr(v.ExpiresAt),
 	}
 
-	switch v.QuotaSource {
-	case app.QuotaLive:
-		l.QuotaSource = strPtr("live")
-	case app.QuotaCache:
-		l.QuotaSource = strPtr("cache")
-		l.CachedAt = timePtr(v.CachedAt)
-	case app.QuotaNone:
+	if !v.HasQuota {
 		return l
 	}
 

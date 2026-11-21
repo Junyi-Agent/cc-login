@@ -33,18 +33,6 @@ func (s Status) String() string {
 // Usable reports whether claude can use the login: signed in, expiring or not.
 func (s Status) Usable() bool { return s == SignedIn || s == Expiring }
 
-// QuotaSource is where View.Quota comes from.
-type QuotaSource int
-
-// The quota sources.
-const (
-	QuotaNone  QuotaSource = iota
-	QuotaLive              // the API, now
-	QuotaCache             // the cache, as of View.CachedAt
-)
-
-func (q QuotaSource) String() string { return [...]string{"none", "live", "cache"}[q] }
-
 // QuotaGap is why a usable login has no live quota.
 type QuotaGap int
 
@@ -72,10 +60,9 @@ type View struct {
 	Status    Status
 	ExpiresAt time.Time // zero when unknown or never
 
-	Quota       quota.Quota
-	QuotaSource QuotaSource
-	CachedAt    time.Time // QuotaCache: when the cache entry was written; zero when unknown
-	QuotaGap    QuotaGap
+	Quota    quota.Quota
+	HasQuota bool // the API returned the quota now
+	QuotaGap QuotaGap
 }
 
 // List probes every login: claude auth status and the quota, a few logins
@@ -119,7 +106,7 @@ func (a *App) probe(ctx context.Context, path, id string, l *state.Login, isDefa
 	start := time.Now()
 	defer func() {
 		a.Log.Debug("probe", "login", l.Name, "id", id, "kind", l.Kind, "status", v.Status,
-			"quota", v.QuotaSource, "gap", v.QuotaGap, "took", time.Since(start).Round(time.Millisecond))
+			"quota", v.HasQuota, "gap", v.QuotaGap, "took", time.Since(start).Round(time.Millisecond))
 	}()
 
 	v = View{Name: l.Name, Default: isDefault, Kind: l.Kind, Account: l.Account, Plan: l.Plan, Status: SignedOut}
@@ -160,15 +147,15 @@ func (a *App) probe(ctx context.Context, path, id string, l *state.Login, isDefa
 	}
 
 	if v.Status.Usable() {
-		a.quota(ctx, &v, dir, id)
+		a.quota(ctx, &v, dir)
 	}
 
 	return v
 }
 
 // quota reads the live quota with the access token of the sign-in stored in
-// dir; without one, the cached quota.
-func (a *App) quota(ctx context.Context, v *View, dir, id string) {
+// dir; when it cannot, QuotaGap says why.
+func (a *App) quota(ctx context.Context, v *View, dir string) {
 	if v.Kind == state.APIKey {
 		v.QuotaGap = GapNoLogin
 	} else {
@@ -179,7 +166,7 @@ func (a *App) quota(ctx context.Context, v *View, dir, id string) {
 		case res == creds.OK:
 			q, err := a.Usage(ctx, tok)
 			if err == nil {
-				v.Quota, v.QuotaSource = q, QuotaLive
+				v.Quota, v.HasQuota = q, true
 				return
 			}
 			a.Log.Debug("quota request failed", "login", v.Name, "err", err)
@@ -193,7 +180,4 @@ func (a *App) quota(ctx context.Context, v *View, dir, id string) {
 		}
 	}
 
-	if q, at, err := quota.Cached(a.QuotaCache, id, a.Now()); err == nil {
-		v.Quota, v.QuotaSource, v.CachedAt = q, QuotaCache, at
-	}
 }
