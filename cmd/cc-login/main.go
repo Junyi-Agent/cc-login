@@ -21,7 +21,7 @@ import (
 
 // ported are the commands this binary implements so far; the others pass the
 // argument checks and then say to use cc-login.zsh.
-var ported = map[string]bool{"list": true, "help": true, "completion": true}
+var ported = map[string]bool{"list": true, "completion": true}
 
 // app is one run of cc-login: where it writes and which data directory it
 // reads.
@@ -46,13 +46,16 @@ func main() {
 
 func run(args []string, stdout, stderr io.Writer) int {
 	a := &app{out: stdout, err: stderr, store: store.New()}
-	root := a.command()
-	a.root = root
+	a.root = a.command()
+
+	// cobra reads os.Args when the args are nil.
 	if args == nil {
-		args = []string{} // cobra reads os.Args when the args are nil
+		args = []string{}
 	}
-	root.SetArgs(args)
-	err := root.Execute()
+	a.root.SetArgs(args)
+
+	err := a.root.Execute()
+
 	var code exitCode
 	switch {
 	case errors.As(err, &code):
@@ -67,51 +70,69 @@ func run(args []string, stdout, stderr io.Writer) int {
 // dispatch runs cmd with its arguments; cmd is "" when cc-login has no
 // arguments.
 func (a *app) dispatch(cmd string, args []string) error {
+	// cc-login, and cc-login "" as ${1:-list} in zsh.
 	if cmd == "" {
-		cmd = "list" // cc-login, and cc-login "" as ${1:-list} in zsh
+		cmd = "list"
 	}
+
 	switch cmd {
 	case "help", "-h", "--help":
-		switch {
-		case len(args) == 0:
-			printUsage(a.out, "")
-		case len(args) == 1 && usageText[args[0]] != "":
-			printUsage(a.out, args[0])
-		default:
-			a.errf("no command %s; the commands: %s", args[0], strings.Join(cmds, " "))
-			return exitCode(1)
-		}
-		return nil
+		return a.help(args)
 	case "list", "use", "add", "run", "renew", "rename", "remove", "completion":
 	default:
-		if strings.HasPrefix(cmd, "-") {
-			a.errf("unknown option %s; see cc-login help", cmd)
-			return exitCode(1)
-		}
-		a.errf("unknown command %s; the commands: %s", cmd, strings.Join(cmds, " "))
-		if _, ok := a.store.Dir(cmd); ok {
-			a.errf("to make login %s the default, run: cc-login use %s", cmd, cmd)
-		}
-		return exitCode(1)
+		return a.unknown(cmd)
 	}
 
 	inv, code, done := a.parse(cmd, args)
-	switch {
-	case done && code == 0:
-		return nil
-	case done:
+	if done {
 		return exitCode(code)
-	case !ported[cmd]:
+	}
+
+	if !ported[cmd] {
 		a.errf("%s is not ported to Go yet; run it with the zsh cc-login", cmd)
 		return exitCode(1)
-	case cmd == "completion":
+	}
+
+	if cmd == "completion" {
 		return a.root.GenZshCompletion(a.out)
 	}
+
 	if !a.checkSetUp() {
 		return exitCode(1)
 	}
+
 	// list is the only ported command that gets here.
 	return a.list(inv.json)
+}
+
+// help prints the usage of all commands, or of the one command in args.
+func (a *app) help(args []string) error {
+	switch {
+	case len(args) == 0:
+		printUsage(a.out, "")
+		return nil
+	case len(args) == 1 && usageText[args[0]] != "":
+		printUsage(a.out, args[0])
+		return nil
+	}
+
+	a.errf("no command %s; the commands: %s", args[0], strings.Join(cmds, " "))
+	return exitCode(1)
+}
+
+// unknown reports a first argument that is not a command; when it names a
+// login, it says how to make that login the default.
+func (a *app) unknown(cmd string) error {
+	if strings.HasPrefix(cmd, "-") {
+		a.errf("unknown option %s; see cc-login help", cmd)
+		return exitCode(1)
+	}
+
+	a.errf("unknown command %s; the commands: %s", cmd, strings.Join(cmds, " "))
+	if _, ok := a.store.Dir(cmd); ok {
+		a.errf("to make login %s the default, run: cc-login use %s", cmd, cmd)
+	}
+	return exitCode(1)
 }
 
 // checkSetUp is the read-only part of _cc_login_check: setting cc-login up
@@ -123,23 +144,29 @@ func (a *app) checkSetUp() bool {
 		a.errf("cc-login is not set up on this machine; set it up with the zsh cc-login")
 		return false
 	}
+
+	// CLAUDE_CONFIG_DIR is the user's own setting; cc-login reads it as Claude Code does.
 	cfg := os.Getenv("CLAUDE_CONFIG_DIR")
 	if cfg == "" {
 		home, _ := os.UserHomeDir()
 		cfg = filepath.Join(home, ".claude")
 	}
-	// CLAUDE_CONFIG_DIR is the user's own setting; cc-login reads it as Claude Code does.
-	if fi, err := os.Stat(filepath.Join(cfg, ".credentials.json")); err == nil && fi.Mode().IsRegular() { //nolint:gosec // G703: see above
-		a.errf("%s holds a login that a claude run without cc-login wrote; move it into a login with the zsh cc-login", filepath.Join(cfg, ".credentials.json"))
+	stray := filepath.Join(cfg, ".credentials.json")
+	if fi, err := os.Stat(stray); err == nil && fi.Mode().IsRegular() { //nolint:gosec // G703: see above
+		a.errf("%s holds a login that a claude run without cc-login wrote; move it into a login with the zsh cc-login", stray)
 	}
-	if id, err := store.ReadTrimmed(filepath.Join(s.Root, ".pending")); err == nil && id != "" && !strings.Contains(id, "/") {
+
+	id, err := store.ReadTrimmed(filepath.Join(s.Root, ".pending"))
+	if err == nil && id != "" && !strings.Contains(id, "/") {
 		if _, err := os.Stat(filepath.Join(s.Root, ".dirs", id, ".credentials.json")); err == nil {
 			a.errf("a claude signed in while no login was the default; name that login with the zsh cc-login")
 		}
 	}
+
 	return true
 }
 
+// list prints the logins as a table, or as JSON.
 func (a *app) list(asJSON bool) error {
 	s := a.store
 	p := listing.NewProber(s)
@@ -154,6 +181,7 @@ func (a *app) list(asJSON bool) error {
 		return nil
 	}
 
+	// Colors and the width only on a terminal.
 	st := listing.Style{}
 	if f, ok := a.out.(*os.File); ok && term.IsTerminal(int(f.Fd())) && os.Getenv("NO_COLOR") == "" {
 		st.Color = true
@@ -162,6 +190,7 @@ func (a *app) list(asJSON bool) error {
 			st.Cols = w
 		}
 	}
+
 	if err := listing.Render(a.out, logins, current, p.Now, st); err != nil {
 		a.errf("could not write the list: %v", err)
 		return exitCode(1)

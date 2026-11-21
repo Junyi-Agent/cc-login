@@ -33,6 +33,7 @@ func DefaultRoot() string {
 		home, _ := os.UserHomeDir()
 		base = filepath.Join(home, ".local", "share")
 	}
+
 	return filepath.Join(base, "claude-logins")
 }
 
@@ -57,6 +58,8 @@ func (s *Store) Dir(name string) (string, bool) {
 	if name == "" || strings.Contains(name, "/") || strings.HasPrefix(name, ".") {
 		return "", false
 	}
+
+	// A link: rebuild the path from the target's ID.
 	link := filepath.Join(s.Root, name)
 	dir := link
 	if fi, err := os.Lstat(link); err == nil && fi.Mode()&os.ModeSymlink != 0 {
@@ -66,6 +69,7 @@ func (s *Store) Dir(name string) (string, bool) {
 		}
 		dir = filepath.Join(s.Root, ".dirs", filepath.Base(target))
 	}
+
 	fi, err := os.Stat(dir)
 	if err != nil || !fi.IsDir() {
 		return "", false
@@ -80,6 +84,7 @@ func (s *Store) Names() []string {
 	if err != nil {
 		return nil
 	}
+
 	var names []string
 	for _, e := range ents {
 		n := e.Name()
@@ -90,6 +95,7 @@ func (s *Store) Names() []string {
 			names = append(names, n)
 		}
 	}
+
 	sort.Strings(names)
 	return names
 }
@@ -100,9 +106,11 @@ func (s *Store) Default() (string, bool) {
 	if err != nil {
 		return "", false
 	}
+
 	if _, ok := s.Dir(name); !ok {
 		return "", false
 	}
+
 	return name, true
 }
 
@@ -117,6 +125,7 @@ func (s *Store) Record(name string) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	var m map[string]any
 	if err := json.Unmarshal(b, &m); err != nil {
 		return nil, err
@@ -156,5 +165,6 @@ func ReadTrimmed(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
 	return strings.TrimRight(string(b), "\n"), nil
 }

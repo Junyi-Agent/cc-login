@@ -22,6 +22,7 @@ func TestKeychainService(t *testing.T) {
 
 func TestAccessToken(t *testing.T) {
 	now := time.Unix(1_000_000, 0)
+
 	var keychain []byte
 	old := ReadKeychain
 	ReadKeychain = func(context.Context, string) ([]byte, bool) { return keychain, keychain != nil }

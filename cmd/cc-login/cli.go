@@ -11,9 +11,11 @@ import (
 // every command turns off cobra's flag parsing: cobra would accept options
 // anywhere (add --api-key NAME) and print its own errors.
 func (a *app) command() *cobra.Command {
-	cobra.EnableCommandSorting = false // complete the commands in the usage order
-	runE := func(c *cobra.Command, args []string) error { return a.dispatch(c.Name(), args) }
+	// Complete the commands in the usage order.
+	cobra.EnableCommandSorting = false
 
+	// cc-login with no arguments, or with a first argument that is not a
+	// command: cc-login -x, cc-login nope.
 	root := &cobra.Command{
 		Use:                "cc-login",
 		Args:               cobra.ArbitraryArgs,
@@ -21,7 +23,6 @@ func (a *app) command() *cobra.Command {
 		SilenceErrors:      true,
 		SilenceUsage:       true,
 		CompletionOptions:  cobra.CompletionOptions{DisableDefaultCmd: true},
-		// cc-login, cc-login -x, cc-login nope: the first argument is not a command.
 		RunE: func(_ *cobra.Command, args []string) error {
 			if len(args) == 0 {
 				return a.dispatch("", nil)
@@ -38,15 +39,17 @@ func (a *app) command() *cobra.Command {
 			Use:                name,
 			Short:              short(name),
 			DisableFlagParsing: true,
-			RunE:               runE,
+			RunE:               func(c *cobra.Command, args []string) error { return a.dispatch(c.Name(), args) },
 			ValidArgsFunction:  a.complete,
 		}
+
 		if name == "help" {
 			root.SetHelpCommand(c)
-			continue
+		} else {
+			root.AddCommand(c)
 		}
-		root.AddCommand(c)
 	}
+
 	return root
 }
 
@@ -72,6 +75,7 @@ func (a *app) complete(c *cobra.Command, args []string, _ string) ([]cobra.Compl
 		case "completion":
 			out = []string{"zsh"}
 		}
+
 	case 1:
 		switch c.Name() {
 		case "add":
@@ -80,5 +84,6 @@ func (a *app) complete(c *cobra.Command, args []string, _ string) ([]cobra.Compl
 			out = []string{"--"}
 		}
 	}
+
 	return out, cobra.ShellCompDirectiveNoFileComp
 }

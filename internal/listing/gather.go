@@ -64,6 +64,7 @@ func NewProber(s *store.Store) *Prober {
 // quota request, so they run in parallel.
 func (p *Prober) All(ctx context.Context, names []string) []Login {
 	out := make([]Login, len(names))
+
 	var wg sync.WaitGroup
 	for i, name := range names {
 		wg.Add(1)
@@ -73,6 +74,7 @@ func (p *Prober) All(ctx context.Context, names []string) []Login {
 		}()
 	}
 	wg.Wait()
+
 	return out
 }
 
@@ -80,34 +82,40 @@ func (p *Prober) All(ctx context.Context, names []string) []Login {
 // filter does: an API key login shows "API key …wxyz" and plan api.
 func recordFields(rec map[string]any) (string, string) {
 	apiKey := rec["authMethod"] == "api_key"
-	str := func(v any) (string, bool) {
-		if v == nil || v == false {
-			return "", false
-		}
-		if s, ok := v.(string); ok {
-			return s, true
-		}
-		return fmt.Sprint(v), true
-	}
-	email, ok := str(rec["email"])
+
+	email, ok := jqString(rec["email"])
 	if !ok {
 		email = "-"
 		if apiKey {
-			hint, hasHint := str(rec["apiKeyHint"])
+			hint, hasHint := jqString(rec["apiKeyHint"])
 			if !hasHint {
 				hint = "?"
 			}
 			email = "API key " + hint
 		}
 	}
-	plan, ok := str(rec["subscriptionType"])
+
+	plan, ok := jqString(rec["subscriptionType"])
 	if !ok {
 		plan = "-"
 		if apiKey {
 			plan = "api"
 		}
 	}
+
 	return email, plan
+}
+
+// jqString is a JSON value as jq's // prints it: false when the value is
+// null or false, the string itself for a string, else its text.
+func jqString(v any) (string, bool) {
+	if v == nil || v == false {
+		return "", false
+	}
+	if s, ok := v.(string); ok {
+		return s, true
+	}
+	return fmt.Sprint(v), true
 }
 
 // loginExpiry reads loginExpiresAt from claude auth status --json, or from a
@@ -119,10 +127,12 @@ func loginExpiry(b []byte) int64 {
 	if json.Unmarshal(b, &v) != nil || v.LoginExpiresAt == "" {
 		return 0
 	}
+
 	t, err := time.Parse(time.RFC3339Nano, v.LoginExpiresAt)
 	if err != nil {
 		return 0
 	}
+
 	return t.Unix()
 }
 
@@ -132,16 +142,19 @@ func (p *Prober) One(ctx context.Context, name string) Login {
 	if rec, err := p.Store.Record(name); err == nil {
 		l.Email, l.Plan = recordFields(rec)
 	}
+
 	dir, ok := p.Store.Dir(name)
 	if !ok {
 		return l
 	}
+
 	kind := store.DirKind(dir)
 	l.Token = kind == store.KindToken
 	l.Key = kind == store.KindKey
 
 	out, signed := p.AuthStatus(ctx, claude.Env(p.Env, dir))
 	l.SignedIn = signed
+
 	// claude reports no expiry for a token: the token login's record keeps it.
 	if l.Token {
 		out = nil
@@ -172,8 +185,11 @@ func (p *Prober) One(ctx context.Context, name string) Login {
 			l.QuotaWhy = "expired"
 		}
 	}
+
+	// The live quota failed or there is none: the cache, if it has one.
 	if q, at, err := quota.Cached(p.CachePath, filepath.Base(dir), p.Now); err == nil {
 		l.Quota, l.QuotaOK, l.Cached, l.CachedAt = q, true, true, at
 	}
+
 	return l
 }
