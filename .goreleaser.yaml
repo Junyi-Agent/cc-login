@@ -14,6 +14,8 @@ builds:
 
 archives:
   - formats: [tar.gz]
+    # no version in the name, so releases/latest/download/<name> is a fixed URL (install.sh)
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
     files: [README.md, docs/usage.md]
 
 checksum:

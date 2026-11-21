@@ -26,6 +26,17 @@ To land a feature branch, run `scripts/ship.sh` in its worktree: it pushes
 (the review gate runs), opens the PR, waits for CI, squash merges and removes
 the worktree ([ADR 0014](adr/0014-ship-script.md)).
 
+## Releases
+
+Pushing a `v*` tag runs `.github/workflows/release.yml`: goreleaser builds
+darwin and linux binaries (amd64, arm64) and publishes them as
+`cc-login_<os>_<arch>.tar.gz` with `checksums.txt`, which `install.sh`
+downloads ([ADR 0016](adr/0016-release-binaries.md)).
+
+```sh
+git tag v0.2.0 origin/main && git push origin v0.2.0
+```
+
 ## Layout
 
 | Package | What it does |

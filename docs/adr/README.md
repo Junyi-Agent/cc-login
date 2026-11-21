@@ -32,3 +32,4 @@
 | [0013](0013-first-run.md) | 上手：add 自己跑 setup-token，报错指出下一步，version 检查链接 | 采纳 |
 | [0014](0014-ship-script.md) | 用 scripts/ship.sh 一步合并 feature 分支 | 采纳 |
 | [0015](0015-simplify-more.md) | 再精简：token 不推断组织、renew 只做登录、表格一列过期时间、确认写 stderr | 采纳 |
+| [0016](0016-release-binaries.md) | 用 GitHub release 的二进制安装：固定的包名和 install.sh | 采纳 |
