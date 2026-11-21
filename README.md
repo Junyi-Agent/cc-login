@@ -37,5 +37,5 @@ cc-login list          # the logins, their quota and expiry
 cc-login use personal  # switch the default
 ```
 
-Everything else: `cc-login --help`. More in [docs/usage.md](docs/usage.md);
+Something not working: `cc-login doctor`. Everything else: `cc-login --help`. More in [docs/usage.md](docs/usage.md);
 contributing in [docs/development.md](docs/development.md).

@@ -30,6 +30,7 @@ type fake struct {
 	statusTo map[string][]string // the env each AuthStatus got, by directory
 
 	pathErr error                          // Path fails with it
+	linked  bool                           // a plain claude is cc-login (the claude link)
 	login   func(env, args []string) error // claude auth login; nil does nothing
 	logout  func(env []string) error       // claude auth logout; nil does nothing
 }
@@ -65,7 +66,7 @@ func (f *fake) AuthLogout(_ context.Context, env []string) error {
 	return f.logout(env)
 }
 
-func (f *fake) InPath() (string, bool) { return "/bin/claude", false }
+func (f *fake) InPath() (string, bool) { return "/bin/claude", f.linked }
 
 // newApp makes an App over a temporary root with these logins (by ID).
 func newApp(t *testing.T, logins map[string]*state.Login, def string, f *fake) *App {

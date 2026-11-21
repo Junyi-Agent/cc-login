@@ -1,0 +1,39 @@
+# The claude of the test is not cc-login, so there is no claude link: a
+# problem, with the fix. No logins yet is only a warning.
+! exec cc-login doctor
+stdout '^✓ claude: '
+stdout '^✗ a plain claude runs .* without cc-login'
+stdout 'fix: link cc-login as claude'
+stdout '^! no logins yet'
+stdout 'fix: cc-login add NAME'
+stderr 'cc-login: 1 problem\(s\) found'
+
+# A login whose token file is gone is a problem: exit 1, with the fix.
+mkdir root/.dirs/t1
+cp state.json root/state.json
+! exec cc-login doctor
+stdout '✗ login ci: oauth-token is gone'
+stdout 'fix: cc-login remove ci, then add it again'
+stderr 'cc-login: .* problem\(s\) found'
+
+# The token file is back; only warnings are left (no scopes, no default).
+cp token root/.dirs/t1/oauth-token
+chmod 700 root/.dirs/t1
+chmod 600 root/.dirs/t1/oauth-token
+! exec cc-login doctor
+stdout '✗ no default login'
+stdout '! login ci: its token cannot read'
+! stdout 'sk-ant'
+
+! exec cc-login doctor extra
+stderr 'unknown command|accepts no arguments'
+
+-- state.json --
+{
+  "version": 1,
+  "logins": {
+    "t1": {"name": "ci", "kind": "token", "created_at": "2026-11-01T00:00:00Z"}
+  }
+}
+-- token --
+sk-ant-oat01-fake-token
