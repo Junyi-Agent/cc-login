@@ -15,7 +15,7 @@
 
 ## 后果
 
-- 删掉约 700 行代码和测试，`internal/quota` 包、`cc-login migrate` 命令、`--format` 选项不复存在。
+- 非测试的 Go 代码从约 3250 行减到约 2640 行，连同测试共少约 950 行；`internal/quota` 包、`cc-login migrate` 命令、`--format` 选项去掉。
 - 依赖 `--format tsv` 或模板的脚本要改用 `--json` 加 `jq`。
 - 账号很长、终端很窄时表格会折行。
 
