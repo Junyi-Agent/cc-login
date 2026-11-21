@@ -73,7 +73,7 @@ the one new claude launches use. Without a command it lists the logins.
 		Use:   "add NAME [--sign-in [-- OPTS...] | --api-key | --oauth-token]",
 		Short: "Save a new login, or a token for login NAME",
 		Long: `Save login NAME. Without an option, read a token from claude setup-token
-(sk-ant-oat...) without echo and check it with the Anthropic API; it lasts a
+(sk-ant-oat...), shown as *, and check it with the Anthropic API; it lasts a
 year. For an existing login NAME the token overrides its stored sign-in.
 A new login becomes the default when the machine has none.
 
@@ -94,7 +94,7 @@ Without a terminal, the key or token is one line of stdin.`,
 		}),
 	}
 	add.Flags().Bool("sign-in", false, "sign in with claude auth login, which keeps the sign-in in the macOS Keychain; its options go after --")
-	add.Flags().Bool("api-key", false, "save an Anthropic API key (sk-ant-...), read without echo and checked with the Anthropic API")
+	add.Flags().Bool("api-key", false, "save an Anthropic API key (sk-ant-...), shown as * while typed, and checked with the Anthropic API")
 	add.Flags().Bool("oauth-token", false, "save a token from claude setup-token (the default)")
 	add.MarkFlagsMutuallyExclusive("sign-in", "api-key", "oauth-token")
 

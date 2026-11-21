@@ -25,7 +25,7 @@ version's logins over. Decisions are in
 | `migrate` | converts the zsh version's data layout into `state.json` |
 | `version`, `--version` | the version and commit; `--verbose` (or `CC_LOGIN_DEBUG=1`) logs what any command does on stderr, never keys or tokens |
 | `completion` | zsh, bash, fish and powershell completion: commands, options, login names |
-| `add NAME` | a token from `claude setup-token` (the default, `--oauth-token`), an API key (`--api-key`), or a sign-in (`--sign-in [-- OPTS]`, through `claude auth login`); the key or token is read without echo and checked with the API; without a terminal it is a line of stdin |
+| `add NAME` | a token from `claude setup-token` (the default, `--oauth-token`), an API key (`--api-key`), or a sign-in (`--sign-in [-- OPTS]`, through `claude auth login`); the key or token is shown as `*` while typed and checked with the API; without a terminal it is a line of stdin |
 | `renew NAME [-- OPTS]` | signs a login in again so it expires later; a new token for a token login |
 | `adopt NAME` | moves `~/.claude/.credentials.json`, written by a claude run without cc-login, into a new login (`list` says when there is one) |
 

@@ -13,7 +13,7 @@
 - 补全用 cobra 的 `completion` 命令（zsh、bash、fish、powershell），login 名字由 `ValidArgsFunction` 列出，选项由 cobra 自动补全，替代 zsh 版手写的 `_cc_login_complete`；用户在 shell 配置里加载。
 - 交互界面用 `charmbracelet/bubbletea` + `bubbles` + `lipgloss`，入口是单独的 `cc-login tui`：显示和 `list` 相同的信息，可选中一个 login 执行 use / run / renew / remove。
 - `cc-login` 不带参数仍等于 `list`；TUI 只在显式调用、且 stdin 和 stdout 都是终端时启动，否则报错退出 1。
-- 确认提问和不回显输入用 `charmbracelet/huh`，只在终端里用；非终端时与 zsh 版一样从 stdin 读，需要确认的命令提供 `--yes`。
+- 确认提问和 key、token 的输入用 `charmbracelet/huh`（输入的字符显示为 `*`），只在终端里用；非终端时与 zsh 版一样从 stdin 读，需要确认的命令提供 `--yes`。
 - lipgloss 同时用于 TUI 和 `list` 的表格（0009）。
 
 ## 后果
