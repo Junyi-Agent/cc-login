@@ -22,6 +22,10 @@ go test ./internal/ui -update   # rewrite the golden tables after a deliberate c
 ([testscript](https://pkg.go.dev/github.com/rogpeppe/go-internal/testscript))
 with a fake `claude`.
 
+To land a feature branch, run `scripts/ship.sh` in its worktree: it pushes
+(the review gate runs), opens the PR, waits for CI, squash merges and removes
+the worktree ([ADR 0014](adr/0014-ship-script.md)).
+
 ## Layout
 
 | Package | What it does |
