@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -87,15 +86,6 @@ func newApp(t *testing.T, logins map[string]*state.Login, def string, f *fake) *
 		Parallel:   2,
 		Timeout:    time.Second,
 	}
-}
-
-func lookup(env []string, key string) string {
-	for _, kv := range env {
-		if k, v, _ := strings.Cut(kv, "="); k == key {
-			return v
-		}
-	}
-	return ""
 }
 
 func pct(n int) *int { return &n }

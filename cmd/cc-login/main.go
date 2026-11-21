@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 
 	"github.com/spf13/cobra"
@@ -23,18 +24,29 @@ type cli struct {
 	out, err io.Writer
 	root     *cobra.Command
 	ran      bool // the command line passed the checks and the command ran
+
+	// exec replaces this process with a program; tests replace it.
+	exec func(path string, argv, env []string) error
 }
 
 func main() {
 	// Ctrl-C cancels what runs: claude auth status, the quota requests.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	code := run(ctx, os.Args[1:], os.Stdout, os.Stderr)
+
+	// Installed as claude (a link named claude to cc-login, ADR 0007), it
+	// runs claude with the login: cc-login run -- ARGS.
+	args := os.Args[1:]
+	if filepath.Base(os.Args[0]) == "claude" {
+		args = append([]string{"run", "--"}, args...)
+	}
+
+	code := run(ctx, args, os.Stdout, os.Stderr)
 	stop()
 	os.Exit(code)
 }
 
 func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	c := &cli{app: app.New(), out: stdout, err: stderr}
+	c := &cli{app: app.New(), out: stdout, err: stderr, exec: syscall.Exec}
 	c.root = c.command()
 
 	// cobra reads os.Args when the args are nil.
