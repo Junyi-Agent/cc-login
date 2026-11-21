@@ -28,6 +28,13 @@ func TestScripts(t *testing.T) {
 			env.Setenv("CC_LOGIN_QUOTA_CACHE", filepath.Join(env.WorkDir, "quota.json"))
 			env.Setenv("CC_LOGIN_API_URL", "http://127.0.0.1:1") // no network in tests
 			env.Setenv("NO_COLOR", "1")
+
+			// testscript links cc-login and the fake claude to one test
+			// binary, and Find skips a claude that is cc-login itself (ADR
+			// 0007): name the fake one. testscript puts its commands first
+			// in PATH.
+			bin, _, _ := strings.Cut(env.Getenv("PATH"), string(os.PathListSeparator))
+			env.Setenv("CC_LOGIN_CLAUDE", filepath.Join(bin, "claude"))
 			return nil
 		},
 	})
