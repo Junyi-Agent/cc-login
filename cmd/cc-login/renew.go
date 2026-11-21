@@ -12,7 +12,8 @@ func (c *cli) renewCmd() *cobra.Command {
 		Short: "Sign login NAME in again, so that it expires later",
 		Long: `Sign login NAME in again with claude auth login, also while it is signed in, so
 that it expires later; OPTS are options for claude auth login. For a token
-login, run claude setup-token and save the new token it prints.`,
+login, sign in with OAuth in the browser again, as add does, and save the new
+token.`,
 		Args:              c.nameThenOpts,
 		ValidArgsFunction: c.completeName,
 		RunE: func(cmd *cobra.Command, args []string) error {

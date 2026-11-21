@@ -18,9 +18,18 @@ The short version is in [[README]]. `cc-login --help` and
 | `remove NAME` | `claude auth logout`, then deletes the login; asks first (`--yes` without a terminal) |
 | `version`, `--version` | the version and commit; `version` also says which claude cc-login runs and whether the `claude` link is in place; `--verbose` (or `CC_LOGIN_DEBUG=1`) logs what any command does on stderr, never keys or tokens |
 | `completion` | zsh, bash, fish and powershell completion: commands, options, login names |
-| `add NAME` | a new login: a token from `claude setup-token`, which cc-login runs on the terminal (the default, `--oauth-token`), an API key (`--api-key`), or a sign-in (`--sign-in [-- OPTS]`, through `claude auth login`); the key or token is shown as `*` while typed and checked with the API; without a terminal it is a line of stdin |
-| `renew NAME [-- OPTS]` | signs a login in again so it expires later; a new token for a token login |
+| `add NAME` | a new login: an OAuth token (the default, `--oauth-token`; see below), an API key (`--api-key`, checked with the API), or a sign-in (`--sign-in [-- OPTS]`, through `claude auth login`); the key or code is shown as `*` while typed; without a terminal it is a line of stdin |
+| `renew NAME [-- OPTS]` | signs a login in again so it expires later; a new OAuth token for a token login |
 | `adopt NAME` | moves `~/.claude/.credentials.json`, written by a claude run without cc-login, into a new login (`list` says when there is one) |
+
+A token login signs in with OAuth ([ADR 0017](adr/0017-own-oauth.md)):
+cc-login prints a link and opens it in the browser; choose the account, allow
+access, and paste the code the page shows (`CODE#STATE`). The token lasts a
+year and may read the account (`user:inference user:profile`), so `list`
+shows its email and claude's `/status` shows the account and organization.
+cc-login keeps no refresh token. A token login saved by an older cc-login
+(from `claude setup-token`) has no account for claude; `cc-login renew NAME`
+replaces its token.
 
 `list` runs `claude auth status` and the quota request for up to 8 logins at
 once; Ctrl-C stops it. The table shows how long until a login expires; `list
@@ -77,6 +86,7 @@ even after `cc-login use` picks another default.
 | `CC_LOGIN_ROOT` | the data directory |
 | `CC_LOGIN_CLAUDE` | the claude to run, instead of the first `claude` in `PATH` |
 | `CC_LOGIN_API_URL` | the Anthropic API (tests point it at a local server) |
+| `CC_LOGIN_OAUTH_URL` | the server a token login's code is traded at, `https://platform.claude.com` (tests point it at a local server) |
 | `CC_LOGIN_DEBUG` | `1`: the debug log, as `--verbose` |
 | `NO_COLOR` | no colors |
 
@@ -112,7 +122,7 @@ $CC_LOGIN_ROOT, or $XDG_DATA_HOME/claude-logins, or ~/.local/share/claude-logins
 ├── .lock
 └── .dirs/ID/        one login's credentials (0700): CLAUDE_SECURESTORAGE_CONFIG_DIR
     ├── api-key      an API key login's key (0600)
-    └── oauth-token  a token login's token from claude setup-token (0600)
+    └── oauth-token  a token login's OAuth access token (0600)
 ```
 
 A sign-in's credentials are kept by Claude Code: in the macOS Keychain, under a

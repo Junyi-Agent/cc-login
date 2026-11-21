@@ -80,7 +80,7 @@ func (a *App) probe(ctx context.Context, id string, l *state.Login, isDefault bo
 		v.Plan = "api"
 	}
 
-	env, err := a.env(id, l.Kind)
+	env, err := a.env(id, l)
 	if err != nil {
 		return v // the key or token file is gone: claude cannot sign in
 	}

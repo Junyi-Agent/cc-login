@@ -25,7 +25,8 @@ func TestScripts(t *testing.T) {
 		Dir: "testdata/script",
 		Setup: func(env *testscript.Env) error {
 			env.Setenv("CC_LOGIN_ROOT", filepath.Join(env.WorkDir, "root"))
-			env.Setenv("CC_LOGIN_API_URL", "http://127.0.0.1:1") // no network in tests
+			env.Setenv("CC_LOGIN_API_URL", "http://127.0.0.1:1")   // no network in tests
+			env.Setenv("CC_LOGIN_OAUTH_URL", "http://127.0.0.1:1") // nor for a token
 			env.Setenv("NO_COLOR", "1")
 
 			// testscript links cc-login and the fake claude to one test
@@ -42,7 +43,8 @@ func TestScripts(t *testing.T) {
 // fakeClaude answers `claude auth status --json`: signed in when the
 // credentials directory holds fake-status.json (printed as the status) or
 // when the environment carries a key or a token. Any other command prints
-// its arguments and the credentials it got, without the secrets' values.
+// its arguments and the credentials it got, without the secrets' values,
+// and the token's scopes.
 func fakeClaude() {
 	dir := os.Getenv("CLAUDE_SECURESTORAGE_CONFIG_DIR")
 	args := strings.Join(os.Args[1:], " ")
@@ -79,6 +81,6 @@ func fakeClaude() {
 		return
 	}
 
-	fmt.Printf("claude %s; dir %s; key %t; token %t\n", args, filepath.Base(dir),
-		os.Getenv("ANTHROPIC_API_KEY") != "", os.Getenv("CLAUDE_CODE_OAUTH_TOKEN") != "")
+	fmt.Printf("claude %s; dir %s; key %t; token %t; scopes %s\n", args, filepath.Base(dir),
+		os.Getenv("ANTHROPIC_API_KEY") != "", os.Getenv("CLAUDE_CODE_OAUTH_TOKEN") != "", os.Getenv("CLAUDE_CODE_OAUTH_SCOPES"))
 }

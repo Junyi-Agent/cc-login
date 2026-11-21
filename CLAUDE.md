@@ -1,6 +1,6 @@
 # cc-login (Go)
 
-一台机器上管理多个 Claude Code 登录，claude 由 cc-login 用 exec 启动。最初是 `cc-login.zsh` 的 Go 移植，现在独立设计，不再与 zsh 版兼容（2026-11-21 用户决定）。上手见 [[README]]，用法见 [[docs/usage]]，开发和进度见 [[docs/development]]，设计见 `docs/adr/`（0006–0016）。
+一台机器上管理多个 Claude Code 登录，claude 由 cc-login 用 exec 启动。最初是 `cc-login.zsh` 的 Go 移植，现在独立设计，不再与 zsh 版兼容（2026-11-21 用户决定）。上手见 [[README]]，用法见 [[docs/usage]]，开发和进度见 [[docs/development]]，设计见 `docs/adr/`（0006–0017）。
 
 ## 开发流程
 
@@ -54,5 +54,6 @@ pre-commit install
 审查（`/jy-repo-review`）不把下列行为当问题上报。
 
 - `.golangci.yml` 对 `internal/claude`、`internal/creds` 豁免 G204：运行 `claude` 和 `security` 的参数由 cc-login 自己拼，不经过 shell。
-- `CC_LOGIN_API_URL` 是给测试用的设置：testscript 把它指向本地不存在的地址，保证测试不连网。
+- `CC_LOGIN_API_URL`、`CC_LOGIN_OAUTH_URL` 是给测试用的设置：testscript 把它们指向本地不存在的地址，保证测试不连网。
+- `internal/oauth` 用 Claude Code 的 OAuth client_id 和没公开的地址（[[docs/adr/0017-own-oauth]]）；`cmd/cc-login/prompt.go` 用 `open`/`xdg-open` 打开 cc-login 自己拼的登录链接（G204 用 nolint 注明）。
 - `git_guard.py` 和 `review_gate.py` 来自 `Junyi-Agent/skills`，`review_gate.py` 改了审查方向，并在远端为空时审查全部内容。

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
+	"runtime"
 	"strings"
 
 	"github.com/charmbracelet/huh"
@@ -13,8 +15,8 @@ import (
 )
 
 // prompter is app.Prompter for the command line: it asks with huh on a
-// terminal; without one it reads lines of stdin (a key or a token piped in)
-// and asks nothing else.
+// terminal; without one it reads lines of stdin (a key or a code piped in)
+// and opens no browser.
 type prompter struct {
 	c  *cli
 	in *bufio.Reader
@@ -25,7 +27,7 @@ func (c *cli) prompter() *prompter { return &prompter{c: c, in: bufio.NewReader(
 // terminal reports whether stdin is a terminal, so cc-login can ask.
 func terminal() bool { return term.IsTerminal(int(os.Stdin.Fd())) }
 
-// Secret reads a key or a token, shown as * on a terminal.
+// Secret reads a key or a code, shown as * on a terminal.
 func (p *prompter) Secret(title, help string, valid func(string) error) (string, error) {
 	if !terminal() {
 		line, err := p.in.ReadString('\n')
@@ -43,7 +45,7 @@ func (p *prompter) Secret(title, help string, valid func(string) error) (string,
 	return strings.TrimSpace(v), err
 }
 
-// secretInput is the input box for a key or a token: each character typed
+// secretInput is the input box for a key or a code: each character typed
 // or pasted shows as *, so the user sees that the paste arrived and how long
 // it is, but not the value.
 func secretInput(title, help string, valid func(string) error, v *string) *huh.Input {
@@ -53,19 +55,22 @@ func secretInput(title, help string, valid func(string) error, v *string) *huh.I
 		Value(v)
 }
 
-// Line asks a question whose answer may show; "" without a terminal.
-func (p *prompter) Line(title, help string) (string, error) {
+// Open opens link in the browser on a terminal: open on macOS, xdg-open
+// elsewhere. It says nothing when it cannot: the link is on the screen.
+func (p *prompter) Open(link string) {
 	if !terminal() {
-		return "", nil
+		return
 	}
 
-	var v string
-	err := huh.NewInput().Title(title).Description(help).Value(&v).Run()
-	return strings.TrimSpace(v), err
+	opener := "xdg-open"
+	if runtime.GOOS == "darwin" {
+		opener = "open"
+	}
+	cmd := exec.Command(opener, link) //nolint:gosec // G204: the sign-in link cc-login made, no shell
+	if err := cmd.Start(); err == nil {
+		go func() { _ = cmd.Wait() }()
+	}
 }
-
-// Terminal says whether stdin is a terminal.
-func (p *prompter) Terminal() bool { return terminal() }
 
 // Note is a line for the user on stderr.
 func (p *prompter) Note(msg string) {

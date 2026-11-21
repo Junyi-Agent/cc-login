@@ -9,13 +9,10 @@ import (
 	"time"
 
 	"github.com/Junyi-Agent/cc-login/internal/anthropic"
-	"github.com/Junyi-Agent/cc-login/internal/claude"
 	"github.com/Junyi-Agent/cc-login/internal/creds"
+	"github.com/Junyi-Agent/cc-login/internal/oauth"
 	"github.com/Junyi-Agent/cc-login/internal/state"
 )
-
-// tokenLife is how long a setup-token token lasts; claude does not say.
-const tokenLife = 365 * 24 * time.Hour
 
 // Saved is what Add, Adopt or Renew saved, for the message.
 type Saved struct {
@@ -25,8 +22,8 @@ type Saved struct {
 	ExpiresAt     time.Time // zero when unknown
 }
 
-// Add saves a new login name of that kind: a token from claude setup-token,
-// an API key, or a sign-in with claude auth login (args are its options).
+// Add saves a new login name of that kind: an OAuth token (ADR 0017), an
+// API key, or a sign-in with claude auth login (args are its options).
 // It becomes the default when there is none.
 func (a *App) Add(ctx context.Context, name string, kind state.Kind, args []string, p Prompter) (Saved, error) {
 	if err := a.checkNewName(name); err != nil {
@@ -89,7 +86,7 @@ func (a *App) authenticate(ctx context.Context, id string, l *state.Login, args 
 
 	switch l.Kind {
 	case state.APIKey:
-		key, err := a.saveSecret(ctx, dir, l, p)
+		key, err := a.saveKey(ctx, dir, l.Name, p)
 		if err != nil {
 			return err
 		}
@@ -97,16 +94,7 @@ func (a *App) authenticate(ctx context.Context, id string, l *state.Login, args 
 		return nil
 
 	case state.Token:
-		if err := a.setupToken(ctx, dir, l.Name, p); err != nil {
-			return err
-		}
-		if _, err := a.saveSecret(ctx, dir, l, p); err != nil {
-			return err
-		}
-		askAccount(l, p)
-		expires := a.Now().UTC().Add(tokenLife)
-		l.TokenExpiresAt = &expires
-		return nil
+		return a.saveToken(ctx, dir, l, p)
 
 	case state.SignIn:
 	}
@@ -136,68 +124,61 @@ func (a *App) saveSignIn(ctx context.Context, id string, l *state.Login, args []
 	return nil
 }
 
-// saveSecret reads the API key or the token of login l, checks it with the
-// API and saves it in dir. It returns the secret.
-func (a *App) saveSecret(ctx context.Context, dir string, l *state.Login, p Prompter) (string, error) {
-	noun, title, help, prefix, check := "key", "API key", "An Anthropic API key, sk-ant-...; it shows as *.", "sk-ant-", a.CheckKey
-	if l.Kind == state.Token {
-		noun, title, help, prefix, check = "token", "Token", "The token claude setup-token printed (sk-ant-oat...); it shows as *.", "sk-ant-oat", a.CheckToken
-	}
-	valid := validPrefix(prefix)
+// saveKey reads the API key of login name, checks it with the API and
+// saves it in dir. It returns the key.
+func (a *App) saveKey(ctx context.Context, dir, name string, p Prompter) (string, error) {
+	valid := validPrefix("sk-ant-")
 
-	s, err := p.Secret(title+" for "+l.Name, help, valid)
+	key, err := p.Secret("API key for "+name, "An Anthropic API key, sk-ant-...; it shows as *.", valid)
 	if err != nil {
 		return "", err
 	}
-	if err := valid(s); err != nil {
+	if err := valid(key); err != nil {
 		return "", err
 	}
 
-	v, status := check(ctx, s)
-	a.Log.Debug("check "+noun, "login", l.Name, "verdict", v, "status", status)
+	v, status := a.CheckKey(ctx, key)
+	a.Log.Debug("check key", "login", name, "verdict", v, "status", status)
 	switch v {
 	case anthropic.Rejected:
-		return "", fmt.Errorf("the Anthropic API rejected the %s (HTTP %d); nothing saved", noun, status)
+		return "", fmt.Errorf("the Anthropic API rejected the key (HTTP %d); nothing saved", status)
 	case anthropic.Unknown:
-		p.Note(fmt.Sprintf("Could not check the %s (%s); saving it unchecked.", noun, httpStatus(status)))
+		p.Note(fmt.Sprintf("Could not check the key (%s); saving it unchecked.", httpStatus(status)))
 	case anthropic.Accepted:
 	}
 
-	return s, creds.WriteSecret(dir, l.Kind, s)
+	return key, creds.WriteSecret(dir, state.APIKey, key)
 }
 
-// askAccount asks for the email of token login l, to show in list: a token
-// cannot read it. A login that has one keeps it.
-func askAccount(l *state.Login, p Prompter) {
-	if l.Account != "" {
-		return
+// saveToken signs token login l in with OAuth (ADR 0017): the user allows
+// access in the browser and pastes the code it shows; cc-login trades the
+// code for a token, saves the token in dir, and records in l the account,
+// the scopes and when the token expires.
+func (a *App) saveToken(ctx context.Context, dir string, l *state.Login, p Prompter) error {
+	f := oauth.Start()
+	p.Note("Open this link, choose the account of login " + l.Name + ", allow access, then paste the code it shows:")
+	p.Note(f.URL)
+	p.Open(f.URL)
+
+	code, err := p.Secret("Code for "+l.Name, "The code the browser shows (CODE#STATE); it shows as *.", oauth.CheckCode)
+	if err != nil {
+		return err
 	}
 
-	acct, err := p.Line("Account of "+l.Name, "The email to show in cc-login list; a token cannot read it. Enter skips.")
-	if err == nil && acct != "" {
-		l.Account = strings.Join(strings.Fields(acct), "")
-	}
-}
-
-// setupToken runs claude setup-token on the user's terminal for login name,
-// so the token to paste is on the screen. Without a terminal it says where
-// the token comes from: claude setup-token needs one. When claude fails, a
-// token from a run elsewhere can still be pasted.
-func (a *App) setupToken(ctx context.Context, dir, name string, p Prompter) error {
-	if !p.Terminal() {
-		p.Note("The token comes from claude setup-token, run in a terminal: choose the account of login " + name + " in the browser it opens.")
-		return nil
+	tok, err := a.Exchange(ctx, f, code)
+	a.Log.Debug("oauth token", "login", l.Name, "ok", err == nil)
+	if err != nil {
+		return err
 	}
 
-	p.Note("Running claude setup-token: a browser opens; choose the account of login " + name + ", then paste the token it prints.")
-	a.Log.Debug("claude setup-token", "login", name)
-	err := a.Claude.SetupToken(ctx, creds.StoredEnv(a.Env, dir))
+	if err := creds.WriteSecret(dir, state.Token, tok.AccessToken); err != nil {
+		return err
+	}
 
-	switch {
-	case errors.Is(err, claude.ErrStopped):
-		return fmt.Errorf("claude setup-token: %w", err)
-	case err != nil:
-		p.Note(fmt.Sprintf("claude setup-token failed (%v); run it in another terminal and paste the token it prints.", err))
+	expires := a.Now().UTC().Add(tok.Life())
+	l.TokenExpiresAt, l.Scopes = &expires, tok.Scopes()
+	if tok.Account.Email != "" {
+		l.Account = tok.Account.Email
 	}
 	return nil
 }

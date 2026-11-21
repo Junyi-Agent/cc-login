@@ -8,7 +8,6 @@ import (
 	"math"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 )
 
@@ -78,7 +77,7 @@ func (c *Client) Usage(ctx context.Context, accessToken string) (Quota, error) {
 	return q, err
 }
 
-// Verdict is what the API said about a key or a token.
+// Verdict is what the API said about a key.
 type Verdict int
 
 // The verdicts.
@@ -121,35 +120,4 @@ func (c *Client) CheckKey(ctx context.Context, key string) (v Verdict, status in
 	_ = resp.Body.Close()
 
 	return verdict(resp.StatusCode), resp.StatusCode
-}
-
-// CheckToken asks the API whether it accepts token tok from claude
-// setup-token: a token count, which is free and uses no quota. A response
-// with the anthropic-organization-id header proves the token authenticated,
-// whatever its status (a retired model gives 404).
-func (c *Client) CheckToken(ctx context.Context, tok string) (v Verdict, status int) {
-	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
-	defer cancel()
-
-	body := strings.NewReader(`{"model":"claude-haiku-5-5","messages":[{"role":"user","content":"hi"}]}`)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/v1/messages/count_tokens", body)
-	if err != nil {
-		return Unknown, 0
-	}
-	req.Header.Set("Authorization", "Bearer "+tok)
-	req.Header.Set("anthropic-beta", "oauth-2025-04-20")
-	req.Header.Set("anthropic-version", "2023-06-01")
-	req.Header.Set("content-type", "application/json")
-
-	resp, err := c.HTTP.Do(req)
-	if err != nil {
-		return Unknown, 0
-	}
-	_ = resp.Body.Close()
-
-	v = verdict(resp.StatusCode)
-	if v == Unknown && resp.Header.Get("anthropic-organization-id") != "" {
-		v = Accepted
-	}
-	return v, resp.StatusCode
 }

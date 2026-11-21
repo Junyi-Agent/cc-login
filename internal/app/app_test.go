@@ -13,6 +13,7 @@ import (
 	"github.com/Junyi-Agent/cc-login/internal/anthropic"
 	"github.com/Junyi-Agent/cc-login/internal/claude"
 	"github.com/Junyi-Agent/cc-login/internal/creds"
+	"github.com/Junyi-Agent/cc-login/internal/oauth"
 	"github.com/Junyi-Agent/cc-login/internal/state"
 )
 
@@ -29,7 +30,6 @@ type fake struct {
 	statusTo map[string][]string // the env each AuthStatus got, by directory
 
 	pathErr error                          // Path fails with it
-	setup   func(env []string) error       // claude setup-token; nil does nothing
 	login   func(env, args []string) error // claude auth login; nil does nothing
 	logout  func(env []string) error       // claude auth logout; nil does nothing
 }
@@ -63,13 +63,6 @@ func (f *fake) AuthLogout(_ context.Context, env []string) error {
 		return nil
 	}
 	return f.logout(env)
-}
-
-func (f *fake) SetupToken(_ context.Context, env []string) error {
-	if f.setup == nil {
-		return nil
-	}
-	return f.setup(env)
 }
 
 func (f *fake) InPath() (string, bool) { return "/bin/claude", false }
@@ -150,12 +143,12 @@ func load(t *testing.T, a *App) *state.State {
 	return st
 }
 
-// prompts is a Prompter that answers from lists and keeps the notes. It is
-// at a terminal when terminal is set.
+// prompts is a Prompter that answers from a list and keeps the notes and
+// the links it was asked to open.
 type prompts struct {
-	secrets, lines []string
-	notes          []string
-	terminal       bool // Terminal says so
+	secrets []string
+	notes   []string
+	opened  []string
 }
 
 func (p *prompts) Secret(_, _ string, _ func(string) error) (string, error) {
@@ -167,28 +160,22 @@ func (p *prompts) Secret(_, _ string, _ func(string) error) (string, error) {
 	return s, nil
 }
 
-func (p *prompts) Line(_, _ string) (string, error) {
-	if len(p.lines) == 0 {
-		return "", nil
-	}
-	s := p.lines[0]
-	p.lines = p.lines[1:]
-	return s, nil
-}
-
 func (p *prompts) Note(msg string) { p.notes = append(p.notes, msg) }
 
-func (p *prompts) Terminal() bool { return p.terminal }
+func (p *prompts) Open(link string) { p.opened = append(p.opened, link) }
 
 // Fake values that the fake API accepts.
 const (
 	goodKey   = "sk-ant-api03-good-wxyz"  //nolint:gosec // G101: a fake
+	goodCode  = "good-code#any-state"     //nolint:gosec // G101: a fake
 	goodToken = "sk-ant-oat01-good-token" //nolint:gosec // G101: a fake
 )
 
 // addApp is newApp with the API and claude auth login faked: the API
-// accepts goodKey and goodToken (org o1), rejects others; a sign-in signs
-// the directory in as new@example.com, expiring in signInDays.
+// accepts goodKey and rejects others; the token endpoint trades goodCode
+// for goodToken of tok@example.com, which lasts a year, and refuses other
+// codes; a sign-in signs the directory in as new@example.com, expiring in
+// 30 days.
 func addApp(t *testing.T, logins map[string]*state.Login, def string, f *fake) *App {
 	t.Helper()
 	a := newApp(t, logins, def, f)
@@ -199,11 +186,16 @@ func addApp(t *testing.T, logins map[string]*state.Login, def string, f *fake) *
 		}
 		return anthropic.Rejected, 401
 	}
-	a.CheckToken = func(_ context.Context, tok string) (anthropic.Verdict, int) {
-		if tok == goodToken {
-			return anthropic.Accepted, 200
+	a.Exchange = func(_ context.Context, _ oauth.Flow, code string) (oauth.Token, error) {
+		if err := oauth.CheckCode(code); err != nil {
+			return oauth.Token{}, err
 		}
-		return anthropic.Rejected, 401
+		if code != goodCode {
+			return oauth.Token{}, errors.New("token exchange: HTTP 400: invalid_grant")
+		}
+		tok := oauth.Token{AccessToken: goodToken, ExpiresIn: 31536000, Scope: "user:inference user:profile"}
+		tok.Account.Email = "tok@example.com"
+		return tok, nil
 	}
 	f.login = func(env, _ []string) error {
 		id := filepath.Base(lookup(env, "CLAUDE_SECURESTORAGE_CONFIG_DIR"))

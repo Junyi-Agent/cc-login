@@ -14,6 +14,7 @@ import (
 	"github.com/Junyi-Agent/cc-login/internal/anthropic"
 	"github.com/Junyi-Agent/cc-login/internal/claude"
 	"github.com/Junyi-Agent/cc-login/internal/creds"
+	"github.com/Junyi-Agent/cc-login/internal/oauth"
 	"github.com/Junyi-Agent/cc-login/internal/state"
 )
 
@@ -24,18 +25,16 @@ type Claude interface {
 	AuthStatus(ctx context.Context, env []string) (claude.AuthInfo, error)
 	AuthLogin(ctx context.Context, env, args []string) error
 	AuthLogout(ctx context.Context, env []string) error
-	SetupToken(ctx context.Context, env []string) error // on the user's terminal
-	InPath() (string, bool)                             // what a plain claude runs, and whether it is cc-login
+	InPath() (string, bool) // what a plain claude runs, and whether it is cc-login
 }
 
 // Prompter asks the user. On a terminal Secret shows what is typed as * and
-// Line asks a question; without one, Secret reads a line of stdin and Line
-// answers "".
+// Open opens a link in the browser; without one, Secret reads a line of
+// stdin and Open does nothing.
 type Prompter interface {
 	Secret(title, help string, valid func(string) error) (string, error)
-	Line(title, help string) (string, error)
-	Note(msg string) // a line for the user, on stderr
-	Terminal() bool  // the user is at a terminal
+	Note(msg string)  // a line for the user, on stderr
+	Open(link string) // in the browser, when it can
 }
 
 // App holds the store and the outside world.
@@ -46,7 +45,7 @@ type App struct {
 	Claude Claude
 
 	CheckKey    func(ctx context.Context, key string) (anthropic.Verdict, int)
-	CheckToken  func(ctx context.Context, tok string) (anthropic.Verdict, int)
+	Exchange    func(ctx context.Context, f oauth.Flow, code string) (oauth.Token, error)
 	AccessToken func(ctx context.Context, dir string) (string, time.Time)
 	Usage       func(ctx context.Context, accessToken string) (anthropic.Quota, error)
 
@@ -67,7 +66,7 @@ func New() *App {
 		Now:         time.Now,
 		Claude:      claude.CLI{},
 		CheckKey:    api.CheckKey,
-		CheckToken:  api.CheckToken,
+		Exchange:    oauth.New().Exchange,
 		AccessToken: creds.AccessToken,
 		Usage:       api.Usage,
 		Parallel:    8,
@@ -86,10 +85,10 @@ func (a *App) Names() []string {
 	return st.Names()
 }
 
-// env is the environment of a claude run with the login with that ID: its
+// env is the environment of a claude run with login l, whose ID is id: its
 // directory, and its key or token (creds.Env).
-func (a *App) env(id string, kind state.Kind) ([]string, error) {
-	return creds.Env(a.Env, a.Store.Dir(id), kind)
+func (a *App) env(id string, l *state.Login) ([]string, error) {
+	return creds.Env(a.Env, a.Store.Dir(id), l)
 }
 
 // storedEnv is the environment in which claude sees only the sign-in stored

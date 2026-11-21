@@ -1,6 +1,6 @@
 # 0013 上手：add 自己跑 setup-token，报错指出下一步，version 检查链接
 
-状态：采纳
+状态：采纳（运行 setup-token 的部分已被 [[0017-own-oauth]] 取代）
 
 ## 背景
 
