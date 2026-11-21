@@ -15,7 +15,7 @@ import (
 // in PATH and the data root in $WORK/root.
 func TestMain(m *testing.M) {
 	testscript.Main(m, map[string]func(){
-		"cc-login": func() { os.Exit(run(context.Background(), os.Args[1:], os.Stdout, os.Stderr)) },
+		"cc-login": func() { os.Exit(execute(context.Background(), os.Args[1:], os.Stdout, os.Stderr)) },
 		"claude":   fakeClaude,
 	})
 }

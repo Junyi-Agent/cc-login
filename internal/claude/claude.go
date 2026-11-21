@@ -1,4 +1,6 @@
-// Package claude runs the claude CLI with the credentials of one login.
+// Package claude finds the claude CLI and runs its auth commands
+// (claude auth status, login, logout) in the environment it is given;
+// package creds makes that environment.
 package claude
 
 import (
@@ -11,71 +13,44 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
-	"strings"
 	"syscall"
 	"time"
 
 	"golang.org/x/term"
-
-	"github.com/Junyi-Agent/cc-login/internal/creds"
-	"github.com/Junyi-Agent/cc-login/internal/state"
 )
 
-// credVars are the variables that carry a login's credentials. Env drops
-// them all and sets the login's own, so one login's key or token never
-// reaches another login's claude.
-var credVars = []string{
-	"CLAUDE_SECURESTORAGE_CONFIG_DIR",
-	"ANTHROPIC_API_KEY", "CC_LOGIN_API_KEY_DIR",
-	"CLAUDE_CODE_OAUTH_TOKEN", "CC_LOGIN_OAUTH_TOKEN_DIR",
-	"CC_LOGIN_ID", "CC_LOGIN_DEPTH",
-}
+// CLI is the claude that Find finds, found again at each call: Find only
+// looks at PATH.
+type CLI struct{}
 
-// Env is base with the credentials of one login: its directory, and for an
-// API key or token login the key or token. The secret goes only into the
-// environment, never into argv.
-func Env(base []string, dir string, kind state.Kind) ([]string, error) {
-	env := append(without(base, credVars), "CLAUDE_SECURESTORAGE_CONFIG_DIR="+dir)
+// Path is the claude executable (Find).
+func (CLI) Path() (string, error) { return Find() }
 
-	switch kind {
-	case state.APIKey:
-		k, err := creds.Secret(dir, kind)
-		if err != nil {
-			return nil, err
-		}
-		env = append(env, "ANTHROPIC_API_KEY="+k)
-
-	case state.Token:
-		t, err := creds.Secret(dir, kind)
-		if err != nil {
-			return nil, err
-		}
-		env = append(env, "CLAUDE_CODE_OAUTH_TOKEN="+t)
-
-	case state.SignIn:
+// AuthStatus runs claude auth status (AuthStatus) with env.
+func (CLI) AuthStatus(ctx context.Context, env []string) (AuthInfo, error) {
+	path, err := Find()
+	if err != nil {
+		return AuthInfo{}, err
 	}
-
-	return env, nil
+	return AuthStatus(ctx, path, env)
 }
 
-// StoredEnv is base with only the directory of a login: claude sees the
-// sign-in stored there, not the login's key or token. remove logs that
-// sign-in out.
-func StoredEnv(base []string, dir string) []string {
-	return append(without(base, credVars), "CLAUDE_SECURESTORAGE_CONFIG_DIR="+dir)
-}
-
-// without is env without the variables in names.
-func without(env []string, names []string) []string {
-	out := env[:0:0]
-	for _, kv := range env {
-		k, _, _ := strings.Cut(kv, "=")
-		if !slices.Contains(names, k) {
-			out = append(out, kv)
-		}
+// AuthLogin runs claude auth login (AuthLogin) with env and args.
+func (CLI) AuthLogin(ctx context.Context, env, args []string) error {
+	path, err := Find()
+	if err != nil {
+		return err
 	}
-	return out
+	return AuthLogin(ctx, path, env, args)
+}
+
+// AuthLogout runs claude auth logout (AuthLogout) with env.
+func (CLI) AuthLogout(ctx context.Context, env []string) error {
+	path, err := Find()
+	if err != nil {
+		return err
+	}
+	return AuthLogout(ctx, path, env)
 }
 
 // ErrNotFound means there is no claude to run.
@@ -113,8 +88,8 @@ func Find() (string, error) {
 	return "", ErrNotFound
 }
 
-// Status is what `claude auth status --json` says about a login.
-type Status struct {
+// AuthInfo is what `claude auth status --json` says about a login.
+type AuthInfo struct {
 	SignedIn  bool
 	ExpiresAt time.Time // zero when claude does not say
 	Email     string
@@ -134,7 +109,7 @@ type statusJSON struct {
 // AuthStatus runs `claude auth status --json` (the claude at path) with env.
 // claude exits 0 when the login is signed in. An error means claude did not
 // run at all.
-func AuthStatus(ctx context.Context, path string, env []string) (Status, error) {
+func AuthStatus(ctx context.Context, path string, env []string) (AuthInfo, error) {
 	cmd := exec.CommandContext(ctx, path, "auth", "status", "--json")
 	cmd.Env = env
 	var out bytes.Buffer
@@ -143,10 +118,10 @@ func AuthStatus(ctx context.Context, path string, env []string) (Status, error) 
 	err := cmd.Run()
 	var exitErr *exec.ExitError
 	if err != nil && !errors.As(err, &exitErr) {
-		return Status{}, fmt.Errorf("run %s: %w", path, err)
+		return AuthInfo{}, fmt.Errorf("run %s: %w", path, err)
 	}
 
-	st := Status{SignedIn: err == nil}
+	st := AuthInfo{SignedIn: err == nil}
 
 	var j statusJSON
 	if json.Unmarshal(out.Bytes(), &j) == nil {
@@ -159,9 +134,9 @@ func AuthStatus(ctx context.Context, path string, env []string) (Status, error) 
 	return st, nil
 }
 
-// Logout runs `claude auth logout` with env: it revokes the stored sign-in
+// AuthLogout runs `claude auth logout` with env: it revokes the stored sign-in
 // at Anthropic and deletes it. The error carries what claude printed.
-func Logout(ctx context.Context, path string, env []string) error {
+func AuthLogout(ctx context.Context, path string, env []string) error {
 	cmd := exec.CommandContext(ctx, path, "auth", "logout")
 	cmd.Env = env
 	out, err := cmd.CombinedOutput()
@@ -174,7 +149,7 @@ func Logout(ctx context.Context, path string, env []string) error {
 // ErrStopped means the user stopped claude auth login (Ctrl-C).
 var ErrStopped = errors.New("stopped")
 
-// SignIn runs `claude auth login ARGS` with env, on this terminal. args are
+// AuthLogin runs `claude auth login ARGS` with env, on this terminal. args are
 // options such as --email, never secrets.
 //
 // When stdin is a terminal, claude's stdin is a pipe and cc-login passes it
@@ -182,7 +157,7 @@ var ErrStopped = errors.New("stopped")
 // terminal can split it and reject it as an invalid code. A wrong code can
 // be pasted again; finishing in the browser ends claude. Otherwise claude
 // reads cc-login's stdin.
-func SignIn(ctx context.Context, path string, env, args []string) error {
+func AuthLogin(ctx context.Context, path string, env, args []string) error {
 	cmd := exec.CommandContext(ctx, path, append([]string{"auth", "login"}, args...)...)
 	cmd.Env = env
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr

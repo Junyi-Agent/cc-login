@@ -9,29 +9,29 @@ import (
 	"github.com/Junyi-Agent/cc-login/internal/app"
 )
 
-// Window is one quota window in list --json.
-type Window struct {
+// windowJSON is one quota window in list --json.
+type windowJSON struct {
 	LeftPercent int        `json:"left_percent"`
 	ResetsAt    *time.Time `json:"resets_at"`
 }
 
-// Login is one login in list --json. Times are RFC 3339; unknown values are
-// null, and so is the quota when the API did not return it.
-type Login struct {
-	Name      string     `json:"name"`
-	Default   bool       `json:"default"`
-	Kind      string     `json:"kind"`   // sign-in, token, api-key
-	Status    string     `json:"status"` // signed-in, expiring, expired, signed-out
-	Account   *string    `json:"account"`
-	Plan      *string    `json:"plan"`
-	ExpiresAt *time.Time `json:"expires_at"`
-	FiveHour  *Window    `json:"five_hour"`
-	SevenDay  *Window    `json:"seven_day"`
+// loginJSON is one login in list --json. Times are RFC 3339; unknown values
+// are null, and so is the quota when the API did not return it.
+type loginJSON struct {
+	Name      string      `json:"name"`
+	Default   bool        `json:"default"`
+	Kind      string      `json:"kind"`   // sign-in, token, api-key
+	Status    string      `json:"status"` // signed-in, expiring, expired, signed-out
+	Account   *string     `json:"account"`
+	Plan      *string     `json:"plan"`
+	ExpiresAt *time.Time  `json:"expires_at"`
+	FiveHour  *windowJSON `json:"five_hour"`
+	SevenDay  *windowJSON `json:"seven_day"`
 }
 
 // JSON writes the logins as an indented JSON array.
 func JSON(w io.Writer, views []app.View) error {
-	logins := make([]Login, 0, len(views))
+	logins := make([]loginJSON, 0, len(views))
 	for _, v := range views {
 		logins = append(logins, login(v))
 	}
@@ -41,8 +41,8 @@ func JSON(w io.Writer, views []app.View) error {
 	return enc.Encode(logins)
 }
 
-func login(v app.View) Login {
-	l := Login{
+func login(v app.View) loginJSON {
+	l := loginJSON{
 		Name: v.Name, Default: v.Default, Kind: string(v.Kind), Status: v.Status.String(),
 		Account: strPtr(v.Account), Plan: strPtr(v.Plan), ExpiresAt: timePtr(v.ExpiresAt),
 	}
@@ -54,13 +54,13 @@ func login(v app.View) Login {
 	return l
 }
 
-func window(w *anthropic.Window) *Window {
+func window(w *anthropic.Window) *windowJSON {
 	left, ok := w.Left()
 	if !ok {
 		return nil
 	}
 
-	out := &Window{LeftPercent: left}
+	out := &windowJSON{LeftPercent: left}
 	if w.ResetsAt != nil {
 		out.ResetsAt = timePtr(*w.ResetsAt)
 	}

@@ -146,13 +146,16 @@ ADRs) are in [CLAUDE.md](CLAUDE.md); decisions in [docs/adr](docs/adr/README.md)
 
 | Package | What it does |
 |---|---|
-| `internal/state` | `state.json`: load, update under the lock |
-| `internal/claude` | find claude, the environment of one login, `claude auth status` |
-| `internal/creds` | a login's key or token file; a sign-in's access token from `.credentials.json` or the Keychain |
+| `internal/state` | the data root: `state.json` (load, update under the lock), where each credentials directory is |
+| `internal/creds` | what a credentials directory holds: a key or token file, a sign-in's access token (`.credentials.json` or the Keychain), and the environment of a claude run with one login |
+| `internal/claude` | find claude; run `claude auth status`, `login`, `logout` |
 | `internal/anthropic` | the Anthropic API: the plan quota, checking a key or token |
-| `internal/app` | one function per command; no output, no cobra |
+| `internal/app` | what each command does, one file per command; no output, no cobra |
 | `internal/ui` | the table and the JSON of `list` |
-| `cmd/cc-login` | the command line (cobra) |
+| `cmd/cc-login` | the command line (cobra): one file per command, with its help and what it prints |
+
+The code of a command is in `cmd/cc-login/<command>.go` and
+`internal/app/<command>.go` ([ADR 0012](docs/adr/0012-code-layout.md)).
 
 ## Plan
 

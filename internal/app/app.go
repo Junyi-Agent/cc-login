@@ -1,7 +1,8 @@
-// Package app is what cc-login does, one function per command. It writes
-// nothing to stdout and knows nothing of the command line: cmd/cc-login and
-// the TUI call it (ADR 0009). The outside world (claude, the Keychain, the
-// API, the clock) comes in through the fields, so tests can replace it.
+// Package app is what cc-login does, one function per command, one file
+// per command. It writes nothing to stdout and knows nothing of the command
+// line: cmd/cc-login calls it (ADR 0012). The outside world (claude, the
+// Keychain, the API, the clock) comes in through the fields, so tests can
+// replace it.
 package app
 
 import (
@@ -16,16 +17,31 @@ import (
 	"github.com/Junyi-Agent/cc-login/internal/state"
 )
 
+// Claude runs the claude CLI in the environment it is given.
+// claude.CLI is the real one.
+type Claude interface {
+	Path() (string, error) // the claude executable
+	AuthStatus(ctx context.Context, env []string) (claude.AuthInfo, error)
+	AuthLogin(ctx context.Context, env, args []string) error
+	AuthLogout(ctx context.Context, env []string) error
+}
+
+// Prompter asks the user. On a terminal Secret shows what is typed as * and
+// Line asks a question; without one, Secret reads a line of stdin and Line
+// answers "".
+type Prompter interface {
+	Secret(title, help string, valid func(string) error) (string, error)
+	Line(title, help string) (string, error)
+	Note(msg string) // a line for the user, on stderr
+}
+
 // App holds the store and the outside world.
 type App struct {
-	Store *state.Store
-	Env   []string // the environment claude starts from
-	Now   func() time.Time
+	Store  *state.Store
+	Env    []string // the environment claude starts from
+	Now    func() time.Time
+	Claude Claude
 
-	FindClaude  func() (string, error)
-	AuthStatus  func(ctx context.Context, path string, env []string) (claude.Status, error)
-	Logout      func(ctx context.Context, path string, env []string) error
-	SignIn      func(ctx context.Context, path string, env, args []string) error
 	CheckKey    func(ctx context.Context, key string) (anthropic.Verdict, int)
 	CheckToken  func(ctx context.Context, tok string) (anthropic.Verdict, string, int)
 	AccessToken func(ctx context.Context, dir string) (string, time.Time)
@@ -46,10 +62,7 @@ func New() *App {
 		Store:       state.New(),
 		Env:         os.Environ(),
 		Now:         time.Now,
-		FindClaude:  claude.Find,
-		AuthStatus:  claude.AuthStatus,
-		Logout:      claude.Logout,
-		SignIn:      claude.SignIn,
+		Claude:      claude.CLI{},
 		CheckKey:    api.CheckKey,
 		CheckToken:  api.CheckToken,
 		AccessToken: creds.AccessToken,
@@ -68,4 +81,26 @@ func (a *App) Names() []string {
 		return nil
 	}
 	return st.Names()
+}
+
+// env is the environment of a claude run with the login with that ID: its
+// directory, and its key or token (creds.Env).
+func (a *App) env(id string, kind state.Kind) ([]string, error) {
+	return creds.Env(a.Env, a.Store.Dir(id), kind)
+}
+
+// storedEnv is the environment in which claude sees only the sign-in stored
+// for the login with that ID, not the login's key or token.
+func (a *App) storedEnv(id string) []string {
+	return creds.StoredEnv(a.Env, a.Store.Dir(id))
+}
+
+// lookup is the value of variable key in env.
+func lookup(env []string, key string) string {
+	for i := len(env) - 1; i >= 0; i-- {
+		if len(env[i]) > len(key) && env[i][len(key)] == '=' && env[i][:len(key)] == key {
+			return env[i][len(key)+1:]
+		}
+	}
+	return ""
 }

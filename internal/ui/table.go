@@ -1,5 +1,5 @@
-// Package ui draws what cc-login prints: the table of logins, its JSON and
-// TSV forms.
+// Package ui draws what cc-login list prints: the table of logins
+// (table.go) and its JSON (format.go).
 package ui
 
 import (

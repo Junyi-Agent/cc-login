@@ -1,6 +1,6 @@
 # cc-login (Go)
 
-一台机器上管理多个 Claude Code 登录，claude 由 cc-login 用 exec 启动。最初是 `cc-login.zsh` 的 Go 移植，现在独立设计，不再与 zsh 版兼容（2026-11-21 用户决定）。用法和进度见 [[README]]，设计见 `docs/adr/`（0006–0011）。
+一台机器上管理多个 Claude Code 登录，claude 由 cc-login 用 exec 启动。最初是 `cc-login.zsh` 的 Go 移植，现在独立设计，不再与 zsh 版兼容（2026-11-21 用户决定）。用法和进度见 [[README]]，设计见 `docs/adr/`（0006–0012）。
 
 ## 开发流程
 
@@ -32,7 +32,7 @@ pre-commit install
 
 - 数据布局以 [[docs/adr/0008-state-json-layout]] 为准：元数据只在 `state.json`，写之前加锁、原子替换；不移动、不改名凭据目录（Keychain 条目名是目录路径的 SHA-256 前 8 位，路径一变 login 就未登录）。
 - claude 只经 `cc-login run` 或 `claude` 链接用 exec 启动（[[docs/adr/0007-launch-claude-by-exec]]），不往 shell 导出凭据。
-- 分层见 [[docs/adr/0009-code-structure]]：业务逻辑在 `internal/app`，不写 stdout、不依赖 cobra；`cmd/cc-login` 只做命令行。
+- 分层和文件布局见 [[docs/adr/0012-code-layout]]：业务逻辑在 `internal/app`，不写 stdout、不依赖 cobra；`cmd/cc-login` 只做命令行。每个命令在 `cmd/cc-login/<命令>.go` 和 `internal/app/<命令>.go` 各一个文件；凭据目录里的东西（key/token 文件、access token、claude 的环境）只在 `internal/creds`。
 - help、用法和参数报错由 cobra 生成（[[docs/adr/0006-cobra-and-bubbletea]]）。选项注册给 cobra，参数检查用 cobra 的 `Args`，不手写解析。
 - 设置只来自环境变量（README 的设置表），新增时写进 README。
 

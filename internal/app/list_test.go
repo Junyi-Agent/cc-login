@@ -3,11 +3,7 @@ package app
 import (
 	"context"
 	"errors"
-	"log/slog"
-	"os"
-	"path/filepath"
 	"slices"
-	"sync"
 	"testing"
 	"time"
 
@@ -15,80 +11,6 @@ import (
 	"github.com/Junyi-Agent/cc-login/internal/claude"
 	"github.com/Junyi-Agent/cc-login/internal/state"
 )
-
-var now = time.Date(2026, 11, 21, 12, 0, 0, 0, time.UTC)
-
-// fake is the outside world of a test: claude's answers by credentials
-// directory, access token expiries by directory, quotas by access token.
-type fake struct {
-	mu       sync.Mutex
-	status   map[string]claude.Status
-	tokens   map[string]time.Time
-	quotas   map[string]anthropic.Quota
-	statusTo map[string][]string // the env each AuthStatus got, by directory
-}
-
-// newApp makes an App over a temporary root with these logins (by ID).
-func newApp(t *testing.T, logins map[string]*state.Login, def string, f *fake) *App {
-	t.Helper()
-	s := &state.Store{Root: t.TempDir()}
-
-	for id, l := range logins {
-		dir := s.Dir(id)
-		if err := os.MkdirAll(dir, 0o700); err != nil {
-			t.Fatal(err)
-		}
-
-		file := map[state.Kind]string{state.APIKey: state.APIKeyFile, state.Token: state.TokenFile}[l.Kind]
-		if file != "" {
-			if err := os.WriteFile(filepath.Join(dir, file), []byte("secret-of-"+id+"\n"), 0o600); err != nil {
-				t.Fatal(err)
-			}
-		}
-	}
-
-	err := s.Update(func(st *state.State) error {
-		st.Logins, st.Default = logins, def
-		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	f.statusTo = map[string][]string{}
-	return &App{
-		Store:      s,
-		Env:        []string{"PATH=/bin", "ANTHROPIC_API_KEY=from-the-shell"},
-		Now:        func() time.Time { return now },
-		FindClaude: func() (string, error) { return "claude", nil },
-		AuthStatus: func(_ context.Context, _ string, env []string) (claude.Status, error) {
-			dir := lookup(env, "CLAUDE_SECURESTORAGE_CONFIG_DIR")
-			f.mu.Lock()
-			defer f.mu.Unlock()
-			f.statusTo[filepath.Base(dir)] = env
-			return f.status[filepath.Base(dir)], nil
-		},
-		AccessToken: func(_ context.Context, dir string) (string, time.Time) {
-			exp, ok := f.tokens[filepath.Base(dir)]
-			if !ok {
-				return "", time.Time{}
-			}
-			return "access-" + filepath.Base(dir), exp
-		},
-		Usage: func(_ context.Context, tok string) (anthropic.Quota, error) {
-			q, ok := f.quotas[tok]
-			if !ok {
-				return anthropic.Quota{}, errors.New("HTTP 500")
-			}
-			return q, nil
-		},
-		Parallel: 2,
-		Timeout:  time.Second,
-		Log:      slog.New(slog.DiscardHandler),
-	}
-}
-
-func used(f float64) *anthropic.Window { return &anthropic.Window{Used: &f} }
 
 func TestList(t *testing.T) {
 	inDays := func(d int) *time.Time { t := now.Add(time.Duration(d) * 24 * time.Hour); return &t }
@@ -103,7 +25,7 @@ func TestList(t *testing.T) {
 		"h8": {Name: "flaky", Kind: state.SignIn},
 	}
 	f := &fake{
-		status: map[string]claude.Status{
+		status: map[string]claude.AuthInfo{
 			"a1": {SignedIn: true, ExpiresAt: *inDays(30)},
 			"b2": {SignedIn: true, ExpiresAt: *inDays(2)},
 			"d4": {ExpiresAt: *inDays(-1)},
@@ -191,7 +113,7 @@ func TestListKeepsSecretsApart(t *testing.T) {
 		"t1": {Name: "tok", Kind: state.Token},
 		"s1": {Name: "sign", Kind: state.SignIn},
 	}
-	f := &fake{status: map[string]claude.Status{}}
+	f := &fake{status: map[string]claude.AuthInfo{}}
 	a := newApp(t, logins, "", f)
 
 	if _, err := a.List(context.Background()); err != nil {
@@ -223,7 +145,7 @@ func TestListKeepsSecretsApart(t *testing.T) {
 func TestListNoLogins(t *testing.T) {
 	f := &fake{}
 	a := newApp(t, map[string]*state.Login{}, "", f)
-	a.FindClaude = func() (string, error) { return "", claude.ErrNotFound }
+	f.pathErr = claude.ErrNotFound
 
 	views, err := a.List(context.Background())
 	if err != nil || len(views) != 0 {
@@ -232,7 +154,7 @@ func TestListNoLogins(t *testing.T) {
 }
 
 func TestListCancelled(t *testing.T) {
-	f := &fake{status: map[string]claude.Status{}}
+	f := &fake{status: map[string]claude.AuthInfo{}}
 	a := newApp(t, map[string]*state.Login{"a1": {Name: "work", Kind: state.SignIn}}, "", f)
 
 	ctx, cancel := context.WithCancel(context.Background())

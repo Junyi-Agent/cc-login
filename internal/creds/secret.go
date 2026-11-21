@@ -9,13 +9,20 @@ import (
 	"github.com/Junyi-Agent/cc-login/internal/state"
 )
 
+// The files in a credentials directory that hold an API key or a token:
+// file names, not secrets.
+const (
+	APIKeyFile = "api-key"     //nolint:gosec // G101: a file name
+	TokenFile  = "oauth-token" //nolint:gosec // G101: a file name
+)
+
 // file is the file that holds the secret of a login of that kind.
 func file(kind state.Kind) (string, error) {
 	switch kind {
 	case state.APIKey:
-		return state.APIKeyFile, nil
+		return APIKeyFile, nil
 	case state.Token:
-		return state.TokenFile, nil
+		return TokenFile, nil
 	case state.SignIn:
 	}
 	return "", fmt.Errorf("a sign-in login has no key or token file")
