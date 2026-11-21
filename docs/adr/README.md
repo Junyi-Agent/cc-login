@@ -30,3 +30,4 @@
 | [0011](0011-simplify.md) | 精简：去掉 migrate、token 叠加、多余的输出格式 | 采纳 |
 | [0012](0012-code-layout.md) | 代码布局：按命令分文件、统一命名、creds 管凭据目录 | 采纳 |
 | [0013](0013-first-run.md) | 上手：add 自己跑 setup-token，报错指出下一步，version 检查链接 | 采纳 |
+| [0014](0014-ship-script.md) | 用 scripts/ship.sh 一步合并 feature 分支 | 采纳 |
