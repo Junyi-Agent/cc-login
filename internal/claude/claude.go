@@ -4,22 +4,54 @@ package claude
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
-	"github.com/Junyi-Agent/cc-login/internal/store"
+	"github.com/Junyi-Agent/cc-login/internal/creds"
+	"github.com/Junyi-Agent/cc-login/internal/state"
 )
 
-// The variables that carry a login's credentials. Each login sets its own and
-// drops the others, so the default login's key or token never leaks into
-// another login's claude.
+// credVars are the variables that carry a login's credentials. Env drops
+// them all and sets the login's own, so one login's key or token never
+// reaches another login's claude.
 var credVars = []string{
 	"CLAUDE_SECURESTORAGE_CONFIG_DIR",
 	"ANTHROPIC_API_KEY", "CC_LOGIN_API_KEY_DIR",
 	"CLAUDE_CODE_OAUTH_TOKEN", "CC_LOGIN_OAUTH_TOKEN_DIR",
+}
+
+// Env is base with the credentials of one login: its directory, and for an
+// API key or token login the key or token. The secret goes only into the
+// environment, never into argv.
+func Env(base []string, dir string, kind state.Kind) ([]string, error) {
+	env := append(without(base, credVars), "CLAUDE_SECURESTORAGE_CONFIG_DIR="+dir)
+
+	switch kind {
+	case state.APIKey:
+		k, err := creds.Secret(dir, kind)
+		if err != nil {
+			return nil, err
+		}
+		env = append(env, "ANTHROPIC_API_KEY="+k)
+
+	case state.Token:
+		t, err := creds.Secret(dir, kind)
+		if err != nil {
+			return nil, err
+		}
+		env = append(env, "CLAUDE_CODE_OAUTH_TOKEN="+t)
+
+	case state.SignIn:
+	}
+
+	return env, nil
 }
 
 // without is env without the variables in names.
@@ -34,40 +66,83 @@ func without(env []string, names []string) []string {
 	return out
 }
 
-// Env is base with the credentials of the login whose directory is dir: the
-// directory, and its API key or token when it has one (_cc_login_with).
-func Env(base []string, dir string) []string {
-	env := append(without(base, credVars), "CLAUDE_SECURESTORAGE_CONFIG_DIR="+dir)
+// ErrNotFound means there is no claude to run.
+var ErrNotFound = errors.New("claude is not installed, or not in PATH")
 
-	switch store.DirKind(dir) {
-	case store.KindKey:
-		if k, err := store.ReadTrimmed(filepath.Join(dir, "api-key")); err == nil {
-			env = append(env, "ANTHROPIC_API_KEY="+k, "CC_LOGIN_API_KEY_DIR="+dir)
-		}
-	case store.KindToken:
-		if t, err := store.ReadTrimmed(filepath.Join(dir, "oauth-token")); err == nil {
-			env = append(env, "CLAUDE_CODE_OAUTH_TOKEN="+t, "CC_LOGIN_OAUTH_TOKEN_DIR="+dir)
-		}
+// Find is the claude executable: $CC_LOGIN_CLAUDE, else the first claude in
+// PATH that is not this program (cc-login can be installed as claude, ADR
+// 0007).
+func Find() (string, error) {
+	if p := os.Getenv("CC_LOGIN_CLAUDE"); p != "" {
+		return p, nil
 	}
 
-	return env
+	self, _ := os.Executable()
+	selfInfo, _ := os.Stat(self)
+
+	for _, dir := range filepath.SplitList(os.Getenv("PATH")) {
+		if dir == "" {
+			dir = "."
+		}
+		p := filepath.Join(dir, "claude")
+
+		// PATH is the user's own setting; Find only looks at what it lists.
+		fi, err := os.Stat(p) //nolint:gosec // G703: see above
+		if err != nil || fi.IsDir() || fi.Mode()&0o111 == 0 {
+			continue
+		}
+		if selfInfo != nil && os.SameFile(fi, selfInfo) {
+			continue
+		}
+
+		return p, nil
+	}
+
+	return "", ErrNotFound
 }
 
-// AuthStatus runs `claude auth status --json` with env. It returns the output
-// and whether claude exited 0, that is, whether the login is signed in.
-func AuthStatus(ctx context.Context, env []string) ([]byte, bool) {
-	cmd := exec.CommandContext(ctx, "claude", "auth", "status", "--json")
+// Status is what `claude auth status --json` says about a login.
+type Status struct {
+	SignedIn  bool
+	ExpiresAt time.Time // zero when claude does not say
+	Email     string
+	OrgID     string
+	OrgName   string
+	Plan      string // subscriptionType
+}
+
+type statusJSON struct {
+	LoginExpiresAt   string `json:"loginExpiresAt"`
+	Email            string `json:"email"`
+	OrgID            string `json:"orgId"`
+	OrgName          string `json:"orgName"`
+	SubscriptionType string `json:"subscriptionType"`
+}
+
+// AuthStatus runs `claude auth status --json` (the claude at path) with env.
+// claude exits 0 when the login is signed in. An error means claude did not
+// run at all.
+func AuthStatus(ctx context.Context, path string, env []string) (Status, error) {
+	cmd := exec.CommandContext(ctx, path, "auth", "status", "--json")
 	cmd.Env = env
 	var out bytes.Buffer
 	cmd.Stdout = &out
 
-	// claude exits non-zero when the login is signed out; an error that is
-	// not an exit status (no claude, say) is signed out too.
 	err := cmd.Run()
 	var exitErr *exec.ExitError
 	if err != nil && !errors.As(err, &exitErr) {
-		return out.Bytes(), false
+		return Status{}, fmt.Errorf("run %s: %w", path, err)
 	}
 
-	return out.Bytes(), err == nil
+	st := Status{SignedIn: err == nil}
+
+	var j statusJSON
+	if json.Unmarshal(out.Bytes(), &j) == nil {
+		st.Email, st.OrgID, st.OrgName, st.Plan = j.Email, j.OrgID, j.OrgName, j.SubscriptionType
+		if t, err := time.Parse(time.RFC3339Nano, j.LoginExpiresAt); err == nil {
+			st.ExpiresAt = t
+		}
+	}
+
+	return st, nil
 }

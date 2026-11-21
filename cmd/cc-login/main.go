@@ -1,123 +1,107 @@
 // cc-login: several Claude Code logins on one machine, and the default login
-// that new claude launches use. A port of cc-login.zsh; see README.md.
+// that claude uses. See README.md.
 package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
-	"strings"
+	"os/signal"
+	"syscall"
 
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
-	"github.com/Junyi-Agent/cc-login/internal/listing"
-	"github.com/Junyi-Agent/cc-login/internal/store"
+	"github.com/Junyi-Agent/cc-login/internal/app"
+	"github.com/Junyi-Agent/cc-login/internal/ui"
 )
 
-// app is one run of cc-login: where it writes and which data directory it
-// reads.
-type app struct {
+// cli is one run of cc-login: the app, and where the output goes.
+type cli struct {
+	app      *app.App
 	out, err io.Writer
-	store    *store.Store
 	root     *cobra.Command
 	ran      bool // the command line passed the checks and the command ran
 }
 
-func (a *app) errf(format string, args ...any) {
-	_, _ = fmt.Fprintf(a.err, "cc-login: "+format+"\n", args...)
-}
-
 func main() {
-	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
+	// Ctrl-C cancels what runs: claude auth status, the quota requests.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	code := run(ctx, os.Args[1:], os.Stdout, os.Stderr)
+	stop()
+	os.Exit(code)
 }
 
-func run(args []string, stdout, stderr io.Writer) int {
-	a := &app{out: stdout, err: stderr, store: store.New()}
-	a.root = a.command()
+func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	c := &cli{app: app.New(), out: stdout, err: stderr}
+	c.root = c.command()
 
 	// cobra reads os.Args when the args are nil.
 	if args == nil {
 		args = []string{}
 	}
-	a.root.SetArgs(args)
+	c.root.SetArgs(args)
 
-	c, err := a.root.ExecuteC()
+	cmd, err := c.root.ExecuteContextC(ctx)
 	if err == nil {
 		return 0
 	}
 
 	// A wrong command line also points to the help of the command.
-	a.errf("%v", err)
-	if !a.ran {
-		_, _ = fmt.Fprintf(a.err, "Run '%s --help' for usage.\n", c.CommandPath())
+	c.errf("%v", err)
+	if !c.ran {
+		_, _ = fmt.Fprintf(c.err, "Run '%s --help' for usage.\n", cmd.CommandPath())
 	}
 	return 1
 }
 
-// checkSetUp is the read-only part of _cc_login_check: setting cc-login up
-// and adopting stray credentials ask questions and move files, which the zsh
-// version still does.
-func (a *app) checkSetUp() error {
-	s := a.store
-	if !s.SetUp() {
-		return errors.New("cc-login is not set up on this machine; set it up with the zsh cc-login")
-	}
-
-	// CLAUDE_CONFIG_DIR is the user's own setting; cc-login reads it as Claude Code does.
-	cfg := os.Getenv("CLAUDE_CONFIG_DIR")
-	if cfg == "" {
-		home, _ := os.UserHomeDir()
-		cfg = filepath.Join(home, ".claude")
-	}
-	stray := filepath.Join(cfg, ".credentials.json")
-	if fi, err := os.Stat(stray); err == nil && fi.Mode().IsRegular() { //nolint:gosec // G703: see above
-		a.errf("%s holds a login that a claude run without cc-login wrote; move it into a login with the zsh cc-login", stray)
-	}
-
-	id, err := store.ReadTrimmed(filepath.Join(s.Root, ".pending"))
-	if err == nil && id != "" && !strings.Contains(id, "/") {
-		if _, err := os.Stat(filepath.Join(s.Root, ".dirs", id, ".credentials.json")); err == nil {
-			a.errf("a claude signed in while no login was the default; name that login with the zsh cc-login")
-		}
-	}
-
-	return nil
+func (c *cli) errf(format string, args ...any) {
+	_, _ = fmt.Fprintf(c.err, "cc-login: "+format+"\n", args...)
 }
 
-// list prints the logins as a table, or as JSON.
-func (a *app) list(asJSON bool) error {
-	if err := a.checkSetUp(); err != nil {
+// list prints the logins: the table, or format for scripts.
+func (c *cli) list(ctx context.Context, format string) error {
+	views, err := c.app.List(ctx)
+	if err != nil {
 		return err
 	}
 
-	s := a.store
-	p := listing.NewProber(s)
-	logins := p.All(context.Background(), s.Names())
-	current, _ := s.Default()
-
-	if asJSON {
-		if err := listing.RenderJSON(a.out, logins, current, p.Now); err != nil {
-			return fmt.Errorf("could not write the JSON: %w", err)
-		}
-		return nil
+	if format != "" {
+		return ui.Format(c.out, views, format)
 	}
 
-	// Colors and the width only on a terminal.
-	st := listing.Style{}
-	if f, ok := a.out.(*os.File); ok && term.IsTerminal(int(f.Fd())) && os.Getenv("NO_COLOR") == "" {
-		st.Color = true
-		st.Theme = listing.Theme()
+	opt := ui.Options{Now: c.app.Now()}
+	if f, ok := c.out.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
 		if w, _, err := term.GetSize(int(f.Fd())); err == nil {
-			st.Cols = w
+			opt.Width = w
 		}
 	}
+	return ui.Table(c.out, views, opt)
+}
 
-	if err := listing.Render(a.out, logins, current, p.Now, st); err != nil {
-		return fmt.Errorf("could not write the list: %w", err)
+// migrate converts the zsh version's data layout and says what it did.
+func (c *cli) migrate() error {
+	m, err := c.app.Migrate()
+	if err != nil {
+		return err
 	}
-	return nil
+
+	if m.Already {
+		_, err = fmt.Fprintln(c.out, "Nothing to do: state.json is there.")
+		return err
+	}
+
+	for _, n := range m.Notes {
+		c.errf("%s", n)
+	}
+
+	def := m.Default
+	if def == "" {
+		def = "none"
+	}
+	_, err = fmt.Fprintf(c.out, "Migrated %d logins (default: %s). The old links and records are in %s.\n"+
+		"The zsh cc-login cannot read the new layout: stop loading it in your shell.\n",
+		len(m.Logins), def, m.Backup)
+	return err
 }

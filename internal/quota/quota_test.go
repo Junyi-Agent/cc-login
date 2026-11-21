@@ -1,65 +1,12 @@
 package quota
 
 import (
-	"context"
-	"net/http"
-	"net/http/httptest"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 )
-
-// serve points UsageURL at a test server with handler h until the test ends.
-func serve(t *testing.T, h http.HandlerFunc) *httptest.Server {
-	t.Helper()
-	srv := httptest.NewServer(h)
-	old := UsageURL
-	UsageURL = srv.URL
-	t.Cleanup(func() {
-		UsageURL = old
-		srv.Close()
-	})
-	return srv
-}
-
-func TestFetch(t *testing.T) {
-	srv := serve(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("Authorization") != "Bearer good" || r.Header.Get("anthropic-beta") != "oauth-2025-04-20" {
-			w.WriteHeader(http.StatusUnauthorized)
-			return
-		}
-		_, _ = w.Write([]byte(`{"five_hour":{"utilization":26.5,"resets_at":"2026-11-21T05:00:00.123456+00:00"},
-			"seven_day":{"utilization":76.4,"resets_at":"2026-11-25T00:00:00Z"},"seven_day_opus":null}`))
-	})
-
-	q, err := Fetch(context.Background(), srv.Client(), "good")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if *q.FiveHour.Used != 27 || q.FiveHour.Reset != time.Date(2026, 11, 21, 5, 0, 0, 0, time.UTC).Unix() {
-		t.Errorf("five_hour = %d %d", *q.FiveHour.Used, q.FiveHour.Reset)
-	}
-	if *q.SevenDay.Used != 76 {
-		t.Errorf("seven_day = %d", *q.SevenDay.Used)
-	}
-
-	if _, err := Fetch(context.Background(), srv.Client(), "bad"); err == nil {
-		t.Error("401: want an error")
-	}
-}
-
-func TestFetchNoLimit(t *testing.T) {
-	srv := serve(t, func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte(`{"five_hour":null,"seven_day":{"utilization":3,"resets_at":null}}`))
-	})
-
-	q, err := Fetch(context.Background(), srv.Client(), "x")
-	if err != nil || q.FiveHour.Used != nil || *q.SevenDay.Used != 3 || q.SevenDay.Reset != 0 {
-		t.Fatalf("q = %+v, %v", q, err)
-	}
-}
 
 func TestCached(t *testing.T) {
 	now := time.Unix(1_000_000, 0)
@@ -75,23 +22,76 @@ func TestCached(t *testing.T) {
 	}
 
 	q, at, err := Cached(path, "A", now)
-	if err != nil || at != 999900 || *q.FiveHour.Used != 11 || q.FiveHour.Reset != 1000500 {
-		t.Fatalf("A: %+v %d %v", q, at, err)
+	if err != nil || !at.Equal(time.Unix(999900, 0)) || *q.FiveHour.Used != 11 || !q.FiveHour.ResetsAt.Equal(time.Unix(1000500, 0)) {
+		t.Fatalf("A: %+v %v %v", q, at, err)
 	}
 	if q.SevenDay.Used != nil {
 		t.Error("A: the weekly window has reset since and should be left out")
 	}
 
-	if _, _, errB := Cached(path, "B", now); errB == nil {
-		t.Error("B: every window has reset; want an error")
+	if _, _, errB := Cached(path, "B", now); !errors.Is(errB, ErrNoCache) {
+		t.Errorf("B: every window has reset: %v; want ErrNoCache", errB)
 	}
 
 	q, at, err = Cached(path, "C", now)
-	if err != nil || at != 0 || *q.SevenDay.Used != 5 || q.SevenDay.Reset != 0 {
-		t.Errorf("C: %+v %d %v", q, at, err)
+	if err != nil || !at.IsZero() || *q.SevenDay.Used != 5 || !q.SevenDay.ResetsAt.IsZero() {
+		t.Errorf("C: %+v %v %v", q, at, err)
 	}
 
-	if _, _, errZ := Cached(path, "Z", now); errZ == nil {
-		t.Error("Z: no entry; want an error")
+	if _, _, errZ := Cached(path, "Z", now); !errors.Is(errZ, ErrNoCache) {
+		t.Errorf("Z: no entry: %v; want ErrNoCache", errZ)
+	}
+
+	if _, _, errM := Cached(filepath.Join(t.TempDir(), "none.json"), "A", now); errM == nil {
+		t.Error("no cache file: want an error")
+	}
+}
+
+func TestLeft(t *testing.T) {
+	n := func(i int) *int { return &i }
+
+	cases := []struct {
+		used *int
+		want int
+	}{
+		{nil, 100},
+		{n(0), 100},
+		{n(27), 73},
+		{n(100), 0},
+		{n(130), 0},
+		{n(-5), 100},
+	}
+
+	for _, tc := range cases {
+		if got := (Window{Used: tc.used}).Left(); got != tc.want {
+			t.Errorf("Left(%v) = %d; want %d", tc.used, got, tc.want)
+		}
+	}
+}
+
+func TestRound(t *testing.T) {
+	f := 26.5
+	if got := Round(&f); *got != 27 {
+		t.Errorf("Round(26.5) = %d", *got)
+	}
+	if Round(nil) != nil {
+		t.Error("Round(nil) is not nil")
+	}
+}
+
+func TestCachePath(t *testing.T) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Skip(err)
+	}
+
+	t.Setenv("CC_LOGIN_QUOTA_CACHE", "~/q.json")
+	if got := CachePath(); got != filepath.Join(home, "q.json") {
+		t.Errorf("CachePath = %q", got)
+	}
+
+	t.Setenv("CC_LOGIN_QUOTA_CACHE", "")
+	if got := CachePath(); got != filepath.Join(home, ".claude", "quota-last.json") {
+		t.Errorf("CachePath = %q", got)
 	}
 }
