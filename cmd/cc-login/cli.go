@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
+	"os"
 	"slices"
 	"strings"
 
@@ -31,6 +33,16 @@ the one new claude launches use. Without a command it lists the logins.
 	}
 	root.SetOut(c.out)
 	root.SetErr(c.err)
+
+	// cc-login --version, and the debug log for every command.
+	root.Version = versionString()
+	root.SetVersionTemplate("cc-login {{.Version}}\n")
+	root.PersistentFlags().BoolP("verbose", "v", false, "log what cc-login does on stderr (also CC_LOGIN_DEBUG=1); never keys or tokens")
+	root.PersistentPreRun = func(cmd *cobra.Command, _ []string) {
+		if v, _ := cmd.Flags().GetBool("verbose"); v || os.Getenv("CC_LOGIN_DEBUG") == "1" {
+			c.app.Log = slog.New(slog.NewTextHandler(c.err, &slog.HandlerOptions{Level: slog.LevelDebug}))
+		}
+	}
 
 	list := &cobra.Command{
 		Use:   "list",
@@ -165,7 +177,16 @@ credentials. cc-login list says when there is such a file.`,
 		RunE: c.runs(func(cmd *cobra.Command, args []string) error { return c.adopt(cmd.Context(), args[0]) }),
 	}
 
-	root.AddCommand(list, use, add, run, renew, rename, remove, adopt, migrate)
+	versionCmd := &cobra.Command{
+		Use:   "version",
+		Short: "Print the version of cc-login",
+		Args:  cobra.NoArgs,
+		RunE: c.runs(func(*cobra.Command, []string) error {
+			return c.say("cc-login %s (%s)", versionString(), goVersion())
+		}),
+	}
+
+	root.AddCommand(list, use, add, run, renew, rename, remove, adopt, migrate, versionCmd)
 	return root
 }
 

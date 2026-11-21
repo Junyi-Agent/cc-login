@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"slices"
@@ -85,6 +86,7 @@ func newApp(t *testing.T, logins map[string]*state.Login, def string, f *fake) *
 		QuotaCache: filepath.Join(t.TempDir(), "cache.json"),
 		Parallel:   2,
 		Timeout:    time.Second,
+		Log:        slog.New(slog.DiscardHandler),
 	}
 }
 

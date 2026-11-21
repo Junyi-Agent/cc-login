@@ -43,6 +43,8 @@ const (
 	QuotaCache             // the cache, as of View.CachedAt
 )
 
+func (q QuotaSource) String() string { return [...]string{"none", "live", "cache"}[q] }
+
 // QuotaGap is why a usable login has no live quota.
 type QuotaGap int
 
@@ -54,6 +56,10 @@ const (
 	GapToken            // a setup-token token cannot read the quota
 	GapNoLogin          // an API key login has no plan quota
 )
+
+func (g QuotaGap) String() string {
+	return [...]string{"none", "stale", "error", "token", "api-key"}[g]
+}
 
 // View is what `list` shows about one login.
 type View struct {
@@ -89,6 +95,7 @@ func (a *App) List(ctx context.Context) ([]View, error) {
 	if err != nil {
 		return nil, err
 	}
+	a.Log.Debug("list", "root", a.Store.Root, "logins", len(ids), "claude", path, "parallel", a.Parallel)
 
 	views := make([]View, len(ids))
 	var g errgroup.Group
@@ -105,11 +112,17 @@ func (a *App) List(ctx context.Context) ([]View, error) {
 }
 
 // probe finds the status and the quota of one login.
-func (a *App) probe(ctx context.Context, path, id string, l *state.Login, isDefault bool) View {
+func (a *App) probe(ctx context.Context, path, id string, l *state.Login, isDefault bool) (v View) {
 	ctx, cancel := context.WithTimeout(ctx, a.Timeout)
 	defer cancel()
 
-	v := View{Name: l.Name, Default: isDefault, Kind: l.Kind, Account: l.Account, Plan: l.Plan, Status: SignedOut}
+	start := time.Now()
+	defer func() {
+		a.Log.Debug("probe", "login", l.Name, "id", id, "kind", l.Kind, "status", v.Status,
+			"quota", v.QuotaSource, "gap", v.QuotaGap, "took", time.Since(start).Round(time.Millisecond))
+	}()
+
+	v = View{Name: l.Name, Default: isDefault, Kind: l.Kind, Account: l.Account, Plan: l.Plan, Status: SignedOut}
 	if l.Kind == state.APIKey {
 		v.Account = "API key"
 		if l.KeyHint != "" {
@@ -125,6 +138,9 @@ func (a *App) probe(ctx context.Context, path, id string, l *state.Login, isDefa
 	}
 
 	cs, err := a.AuthStatus(ctx, path, env)
+	if err != nil {
+		a.Log.Debug("claude auth status failed", "login", l.Name, "err", err)
+	}
 	if err == nil && cs.SignedIn {
 		v.Status = SignedIn
 	}
@@ -166,6 +182,7 @@ func (a *App) quota(ctx context.Context, v *View, dir, id string) {
 				v.Quota, v.QuotaSource = q, QuotaLive
 				return
 			}
+			a.Log.Debug("quota request failed", "login", v.Name, "err", err)
 			v.QuotaGap = GapError
 
 		case v.Kind == state.Token:
