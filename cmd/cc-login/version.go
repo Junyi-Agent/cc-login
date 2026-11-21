@@ -40,7 +40,7 @@ func (c *cli) version() error {
 	case s.InPath == "":
 		return c.say("claude link: none; PATH has no claude")
 	default:
-		return c.say("claude link: none; a plain claude runs %s without cc-login (README: Starting claude)", s.InPath)
+		return c.say("claude link: none; a plain claude runs %s without cc-login (README: Getting Started)", s.InPath)
 	}
 }
 
