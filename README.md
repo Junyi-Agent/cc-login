@@ -9,8 +9,8 @@ uses. cc-login launches claude itself (`cc-login run`, or a `claude` link to
 cc-login), with only that login's credentials in claude's environment.
 
 It began as a port of `cc-login.zsh` and is now its own design: a `state.json`
-data layout, claude launched by exec. The redesign is in progress; until it is
-done, the zsh version keeps working on the old layout. Decisions are in
+data layout, claude launched by exec. `cc-login migrate` moves the zsh
+version's logins over. Decisions are in
 [docs/adr](docs/adr/README.md) (0006–0010).
 
 ## Status
@@ -24,7 +24,9 @@ done, the zsh version keeps working on the old layout. Decisions are in
 | `remove NAME` | `claude auth logout`, then deletes the login; asks first (`--yes` without a terminal) |
 | `migrate` | converts the zsh version's data layout into `state.json` |
 | `completion` | zsh, bash, fish and powershell completion: commands, options, login names |
-| `add` `renew` | not yet: they check their arguments, then say to use the zsh version |
+| `add NAME` | a token from `claude setup-token` (the default, `--oauth-token`), an API key (`--api-key`), or a sign-in (`--sign-in [-- OPTS]`, through `claude auth login`); the key or token is read without echo and checked with the API; without a terminal it is a line of stdin |
+| `renew NAME [-- OPTS]` | signs a login in again so it expires later; a new token for a token login |
+| `adopt NAME` | moves `~/.claude/.credentials.json`, written by a claude run without cc-login, into a new login (`list` says when there is one) |
 
 `list` runs `claude auth status` and the quota request for up to 8 logins at
 once; Ctrl-C stops it.
@@ -35,8 +37,8 @@ once; Ctrl-C stops it.
 `current` and `.pending`. The credentials directories stay where they are, so
 every login stays signed in; the old links and records move into
 `.legacy-<time>/` in the data directory. After that the zsh `cc-login` cannot
-read the logins: stop loading `cc-login.zsh` in your shell. Until `add` and
-`renew` exist here, keep the zsh version and do not migrate yet.
+read the logins: stop loading `cc-login.zsh` in your shell, and start claude
+through cc-login (next section).
 
 ## Starting claude
 
@@ -164,7 +166,7 @@ ADRs) are in [CLAUDE.md](CLAUDE.md); decisions in [docs/adr](docs/adr/README.md)
    [ADR 0009](docs/adr/0009-code-structure.md))
 4. ~~`use`, `rename`, `remove`, `run`, and the `claude` link~~
    ([ADR 0007](docs/adr/0007-launch-claude-by-exec.md))
-5. `add`, `renew`, `adopt`
+5. ~~`add`, `renew`, `adopt`~~
 6. `statusline`, `quota-refresh`, `version`, debug log
    ([ADR 0010](docs/adr/0010-statusline-and-quota-refresh.md))
 7. `cc-login tui` (ADR 0006)

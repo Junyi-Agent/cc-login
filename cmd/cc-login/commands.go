@@ -98,3 +98,67 @@ func (c *cli) launch(name string, args []string) error {
 	}
 	return nil // not reached: exec replaced this process
 }
+
+func (c *cli) add(ctx context.Context, name string, kind state.Kind, args []string) error {
+	res, err := c.app.Add(ctx, name, kind, args, c.prompter())
+	if err != nil {
+		return err
+	}
+
+	if err := c.say("Added login %s%s.", name, account(res.Account)); err != nil {
+		return err
+	}
+	return c.addNotes(res)
+}
+
+func (c *cli) renew(ctx context.Context, name string, args []string) error {
+	res, err := c.app.Renew(ctx, name, args, c.prompter())
+	if err != nil {
+		return err
+	}
+
+	if res.ExpiresAt.IsZero() {
+		return c.say("Renewed login %s.", name)
+	}
+	return c.say("Renewed login %s; it expires %s.", name, res.ExpiresAt.Local().Format("2006-01-02 15:04"))
+}
+
+func (c *cli) adopt(ctx context.Context, name string) error {
+	src := c.app.StrayCredentials()
+	res, err := c.app.Adopt(ctx, name)
+	if err != nil {
+		return err
+	}
+
+	if err := c.say("Moved %s into login %s%s. claude sessions that read it from there lose their credentials.", src, name, account(res.Account)); err != nil {
+		return err
+	}
+	return c.addNotes(res)
+}
+
+// addNotes say whether the new login is the default, and about its token.
+func (c *cli) addNotes(res app.Added) error {
+	if res.OverSignIn {
+		if err := c.say("The token overrides the sign-in stored in %s.", res.Name); err != nil {
+			return err
+		}
+	}
+	if !res.ExpiresAt.IsZero() {
+		if err := c.say("The token expires about %s.", res.ExpiresAt.Local().Format("2006-01-02")); err != nil {
+			return err
+		}
+	}
+
+	if res.BecameDefault {
+		return c.say("It is the default login.")
+	}
+	return c.say("Make it the default with: cc-login use %s", res.Name)
+}
+
+// account is " (me@example.com)", or "" when unknown.
+func account(a string) string {
+	if a == "" {
+		return ""
+	}
+	return " (" + a + ")"
+}

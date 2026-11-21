@@ -25,6 +25,9 @@ type App struct {
 	FindClaude  func() (string, error)
 	AuthStatus  func(ctx context.Context, path string, env []string) (claude.Status, error)
 	Logout      func(ctx context.Context, path string, env []string) error
+	SignIn      func(ctx context.Context, path string, env, args []string) error
+	CheckKey    func(ctx context.Context, key string) (anthropic.Verdict, int)
+	CheckToken  func(ctx context.Context, tok string) (anthropic.Verdict, string, int)
 	AccessToken func(ctx context.Context, dir string, now time.Time) (string, creds.Result)
 	Usage       func(ctx context.Context, accessToken string) (quota.Quota, error)
 	QuotaCache  string
@@ -43,6 +46,9 @@ func New() *App {
 		FindClaude:  claude.Find,
 		AuthStatus:  claude.AuthStatus,
 		Logout:      claude.Logout,
+		SignIn:      claude.SignIn,
+		CheckKey:    api.CheckKey,
+		CheckToken:  api.CheckToken,
 		AccessToken: creds.AccessToken,
 		Usage:       api.Usage,
 		QuotaCache:  quota.CachePath(),
