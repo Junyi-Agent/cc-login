@@ -1,0 +1,28 @@
+# A wrong command line: the reason, and where the help is.
+! exec cc-login nope
+stderr 'unknown command "nope"'
+stderr 'Run ''cc-login --help'' for usage.'
+
+! exec cc-login lsit
+stderr 'did you mean list\?'
+
+! exec cc-login use
+stderr 'accepts 1 arg\(s\), received 0'
+stderr 'Run ''cc-login use --help'' for usage.'
+
+# The arguments are not echoed: a token pasted in the wrong place stays out
+# of the terminal.
+! exec cc-login add work sk-ant-oat01-pasted
+! stderr 'sk-ant'
+
+# A command not ported yet says so and changes nothing.
+! exec cc-login use work
+stderr 'use is not ported to Go yet'
+! exists root/state.json
+
+exec cc-login --help
+stdout 'Available Commands:'
+stdout 'migrate'
+
+exec cc-login completion zsh
+stdout '#compdef cc-login'

@@ -51,7 +51,7 @@ pre-commit install
 
 审查（`/jy-repo-review`）不把下列行为当问题上报。
 
-- `cmd/cc-login/main.go` 里读 `CLAUDE_CONFIG_DIR` 拼路径处的 `//nolint:gosec`（G703）：这个变量是用户自己的设置，Claude Code 也这样读。
 - `.golangci.yml` 对 `internal/claude`、`internal/creds` 豁免 G204：运行 `claude` 和 `security` 的参数由 cc-login 自己拼，不经过 shell。
-- `checkSetUp` 只提示、不处理 `~/.claude/.credentials.json` 和 `.pending`：收编流程要提问并移动文件，还没移植，由 zsh 版做。
+- `migrate` 只认 `NAME -> .dirs/ID` 链接；凭据直接在 `ROOT/NAME/` 的旧式目录会让它报错退出，因为移动目录会让 login 掉登录（Keychain 条目名随路径变）。
+- `CC_LOGIN_API_URL` 是给测试用的设置：testscript 把它指向本地不存在的地址，保证测试不连网。
 - `git_guard.py` 和 `review_gate.py` 来自 `Junyi-Agent/skills`，`review_gate.py` 改了审查方向，并在远端为空时审查全部内容。
