@@ -26,4 +26,4 @@
 | [0007](0007-launch-claude-by-exec.md) | claude 由 cc-login 用 exec 启动，不再往 shell 导出凭据 | 采纳 |
 | [0008](0008-state-json-layout.md) | 数据布局：一个 state.json 加按 ID 存放的凭据目录 | 采纳 |
 | [0009](0009-code-structure.md) | 代码结构：app 层、类型、lipgloss 表格、testscript | 采纳 |
-| [0010](0010-statusline-and-quota-refresh.md) | statusline 和 quota-refresh 成为 cc-login 的子命令 | 采纳 |
+| [0010](0010-statusline-and-quota-refresh.md) | 状态栏和定时刷新配额改由 cc-login 做 | 提议 |

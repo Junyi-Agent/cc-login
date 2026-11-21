@@ -126,6 +126,7 @@ func (a *App) Remove(ctx context.Context, name string, confirm func(RemovePlan) 
 		return ErrCancelled
 	}
 
+	a.Log.Debug("remove", "login", name, "id", id, "logout", plan.LogOut)
 	if plan.LogOut {
 		if err = a.logout(ctx, id); err != nil {
 			return fmt.Errorf("%w: claude auth logout failed: %w", ErrCancelled, err)
@@ -192,6 +193,7 @@ func (a *App) Launch(name string) (Launch, error) {
 		return Launch{}, err
 	}
 	env = append(env, "CC_LOGIN_ID="+id, "CC_LOGIN_DEPTH="+strconv.Itoa(depth+1))
+	a.Log.Debug("launch", "login", l.Name, "id", id, "kind", l.Kind, "claude", path, "depth", depth+1)
 
 	return Launch{Path: path, Env: env, Name: l.Name}, nil
 }

@@ -140,6 +140,7 @@ func (a *App) authenticate(ctx context.Context, id, name string, kind state.Kind
 	}
 	env := claude.StoredEnv(a.Env, dir)
 
+	a.Log.Debug("claude auth login", "login", name, "id", id, "claude", path, "options", len(args))
 	if err = a.SignIn(ctx, path, env, args); err != nil {
 		return nil, fmt.Errorf("claude auth login: %w", err)
 	}
@@ -167,7 +168,9 @@ func (a *App) saveKey(ctx context.Context, dir string, l *state.Login, p Prompte
 		return err
 	}
 
-	switch v, status := a.CheckKey(ctx, key); v {
+	v, status := a.CheckKey(ctx, key)
+	a.Log.Debug("check key", "login", l.Name, "verdict", v, "status", status)
+	switch v {
 	case anthropic.Rejected:
 		return fmt.Errorf("the Anthropic API rejected the key (HTTP %d); nothing saved", status)
 	case anthropic.Unknown:
@@ -199,6 +202,7 @@ func (a *App) saveToken(ctx context.Context, dir string, l *state.Login, askAcco
 	}
 
 	v, org, status := a.CheckToken(ctx, tok)
+	a.Log.Debug("check token", "login", l.Name, "verdict", v, "status", status, "org", org)
 	switch v {
 	case anthropic.Rejected:
 		return fmt.Errorf("the Anthropic API rejected the token (HTTP %d); nothing saved", status)

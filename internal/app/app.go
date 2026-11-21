@@ -6,6 +6,7 @@ package app
 
 import (
 	"context"
+	"log/slog"
 	"os"
 	"time"
 
@@ -34,6 +35,10 @@ type App struct {
 
 	Parallel int           // logins probed at once
 	Timeout  time.Duration // for probing one login
+
+	// Log is the debug log (cc-login --verbose). It records what runs and
+	// what came back, never an environment, a key or a token.
+	Log *slog.Logger
 }
 
 // New is the App of this machine.
@@ -54,6 +59,7 @@ func New() *App {
 		QuotaCache:  quota.CachePath(),
 		Parallel:    8,
 		Timeout:     15 * time.Second,
+		Log:         slog.New(slog.DiscardHandler),
 	}
 }
 
@@ -69,5 +75,7 @@ func (a *App) Names() []string {
 
 // Migrate converts the zsh version's data layout into state.json (ADR 0008).
 func (a *App) Migrate() (state.Migration, error) {
-	return a.Store.Migrate(a.Now())
+	m, err := a.Store.Migrate(a.Now())
+	a.Log.Debug("migrate", "root", a.Store.Root, "already", m.Already, "logins", len(m.Logins), "backup", m.Backup, "err", err)
+	return m, err
 }

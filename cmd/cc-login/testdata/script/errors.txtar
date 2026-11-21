@@ -22,3 +22,21 @@ stdout 'migrate'
 
 exec cc-login completion zsh
 stdout '#compdef cc-login'
+
+# The version, and the debug log on stderr.
+exec cc-login version
+stdout '^cc-login .* \(go1\.'
+exec cc-login --version
+stdout '^cc-login '
+
+mkdir root/.dirs/a1
+cp state.json root/state.json
+exec cc-login list --verbose
+stderr 'level=DEBUG msg=list .*logins=1'
+stderr 'msg=probe login=work .*status=signed-out'
+env CC_LOGIN_DEBUG=1
+exec cc-login list
+stderr 'msg=probe'
+
+-- state.json --
+{"version": 1, "logins": {"a1": {"name": "work", "kind": "sign-in", "created_at": "2026-11-01T00:00:00Z"}}}

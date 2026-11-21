@@ -105,6 +105,8 @@ const (
 	Unknown          // no answer, or another status: the network, a rate limit, an outage
 )
 
+func (v Verdict) String() string { return [...]string{"accepted", "rejected", "unknown"}[v] }
+
 // verdict reads an HTTP status; 0 is no response.
 func verdict(status int) Verdict {
 	switch status {

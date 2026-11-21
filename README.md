@@ -23,6 +23,7 @@ version's logins over. Decisions are in
 | `rename OLD NEW` | renames; the login stays signed in |
 | `remove NAME` | `claude auth logout`, then deletes the login; asks first (`--yes` without a terminal) |
 | `migrate` | converts the zsh version's data layout into `state.json` |
+| `version`, `--version` | the version and commit; `--verbose` (or `CC_LOGIN_DEBUG=1`) logs what any command does on stderr, never keys or tokens |
 | `completion` | zsh, bash, fish and powershell completion: commands, options, login names |
 | `add NAME` | a token from `claude setup-token` (the default, `--oauth-token`), an API key (`--api-key`), or a sign-in (`--sign-in [-- OPTS]`, through `claude auth login`); the key or token is read without echo and checked with the API; without a terminal it is a line of stdin |
 | `renew NAME [-- OPTS]` | signs a login in again so it expires later; a new token for a token login |
@@ -38,7 +39,9 @@ once; Ctrl-C stops it.
 every login stays signed in; the old links and records move into
 `.legacy-<time>/` in the data directory. After that the zsh `cc-login` cannot
 read the logins: stop loading `cc-login.zsh` in your shell, and start claude
-through cc-login (next section).
+through cc-login (next section). Scripts that read the old links and records
+(a status line, a quota refresh) stop finding the logins; see
+[ADR 0010](docs/adr/0010-statusline-and-quota-refresh.md).
 
 ## Starting claude
 
@@ -114,6 +117,7 @@ template to each login (the fields of the JSON object, in Go names).
 | `CC_LOGIN_QUOTA_CACHE` | the quota cache file (default `~/.claude/quota-last.json`) |
 | `CC_LOGIN_CLAUDE` | the claude to run, instead of the first `claude` in `PATH` |
 | `CC_LOGIN_API_URL` | the Anthropic API (tests point it at a local server) |
+| `CC_LOGIN_DEBUG` | `1`: the debug log, as `--verbose` |
 | `NO_COLOR` | no colors |
 
 ## Install
@@ -167,6 +171,8 @@ ADRs) are in [CLAUDE.md](CLAUDE.md); decisions in [docs/adr](docs/adr/README.md)
 4. ~~`use`, `rename`, `remove`, `run`, and the `claude` link~~
    ([ADR 0007](docs/adr/0007-launch-claude-by-exec.md))
 5. ~~`add`, `renew`, `adopt`~~
-6. `statusline`, `quota-refresh`, `version`, debug log
-   ([ADR 0010](docs/adr/0010-statusline-and-quota-refresh.md))
+6. ~~`version`, debug log~~; the status line and the quota refresh wait for a
+   decision ([ADR 0010](docs/adr/0010-statusline-and-quota-refresh.md)): the
+   local scripts that do them read the zsh layout, so they stop finding logins
+   after `cc-login migrate`
 7. `cc-login tui` (ADR 0006)
