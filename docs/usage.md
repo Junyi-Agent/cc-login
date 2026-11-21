@@ -20,6 +20,7 @@ The short version is in [[README]]. `cc-login --help` and
 | `completion` | zsh, bash, fish and powershell completion: commands, options, login names |
 | `add NAME` | a new login: an OAuth token (the default, `--oauth-token`; see below), an API key (`--api-key`, checked with the API), or a sign-in (`--sign-in [-- OPTS]`, through `claude auth login`); the key or code is shown as `*` while typed; without a terminal it is a line of stdin |
 | `renew NAME [-- OPTS]` | signs a login in again so it expires later; a new OAuth token for a token login |
+| `doctor` | checks the setup, offline: claude, the `claude` link, keys and tokens set in the shell, `state.json`, each login's files and expiry; prints what to do for each problem; exit 1 when something does not work ([ADR 0019](adr/0019-doctor.md)) |
 | `adopt NAME` | moves `~/.claude/.credentials.json`, written by a claude run without cc-login, into a new login (`list` says when there is one) |
 
 A token login signs in with OAuth ([ADR 0017](adr/0017-own-oauth.md)):

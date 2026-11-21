@@ -35,3 +35,4 @@
 | [0016](0016-release-binaries.md) | 用 GitHub release 的二进制安装：固定的包名和 install.sh | 采纳 |
 | [0017](0017-own-oauth.md) | token login 由 cc-login 自己走 OAuth，多要 user:profile | 采纳 |
 | [0018](0018-list-org-and-token-quota.md) | 无命令时给帮助；list 加组织列；token login 读配额和 profile | 采纳 |
+| [0019](0019-doctor.md) | cc-login doctor 检查配置：链接、shell 变量、login 文件和过期 | 采纳 |
