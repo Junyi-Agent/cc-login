@@ -23,21 +23,22 @@ func has(fs []Finding, level Level, text string) bool {
 }
 
 // healthy is an App where doctor finds nothing: the link, a default login,
-// a sign-in, a token that reads its profile, a key.
-func healthy(t *testing.T) *App {
+// a sign-in, a token that reads its profile, a key. f is its fake claude.
+func healthy(t *testing.T) (a *App, f *fake) {
 	t.Helper()
 	exp := now.Add(300 * 24 * time.Hour)
-	f := &fake{status: map[string]claude.AuthInfo{}, linked: true}
+	f = &fake{status: map[string]claude.AuthInfo{}, linked: true}
 
-	return newApp(t, map[string]*state.Login{
+	a = newApp(t, map[string]*state.Login{
 		"a1": {Name: "work", Kind: state.SignIn},
 		"t1": {Name: "ci", Kind: state.Token, TokenExpiresAt: &exp, Scopes: []string{"user:inference", "user:profile"}},
 		"k1": {Name: "api", Kind: state.APIKey},
 	}, "a1", f)
+	return a, f
 }
 
 func TestDoctorHealthy(t *testing.T) {
-	a := healthy(t)
+	a, _ := healthy(t)
 	a.Env = []string{"PATH=/bin"}
 	a.Env = append(a.Env, "HOME="+t.TempDir(), "CLAUDE_CONFIG_DIR="+t.TempDir())
 
@@ -76,12 +77,12 @@ func TestDoctorFindsProblems(t *testing.T) {
 			}
 		}, Fail, "login ci: oauth-token is gone"},
 		{"key readable", func(t *testing.T, a *App, _ *fake) {
-			if err := os.Chmod(filepath.Join(a.Store.Dir("k1"), creds.APIKeyFile), 0o644); err != nil {
+			if err := os.Chmod(filepath.Join(a.Store.Dir("k1"), creds.APIKeyFile), 0o644); err != nil { //nolint:gosec // G302: the test makes a file others can read
 				t.Fatal(err)
 			}
 		}, Warn, "login api: api-key is 0644"},
 		{"directory open", func(t *testing.T, a *App, _ *fake) {
-			if err := os.Chmod(a.Store.Dir("a1"), 0o755); err != nil {
+			if err := os.Chmod(a.Store.Dir("a1"), 0o755); err != nil { //nolint:gosec // G302: the test opens a directory to others
 				t.Fatal(err)
 			}
 		}, Warn, "login work: its directory is 0755"},
@@ -105,9 +106,8 @@ func TestDoctorFindsProblems(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		a := healthy(t)
+		a, f := healthy(t)
 		a.Env = []string{"PATH=/bin", "HOME=" + t.TempDir(), "CLAUDE_CONFIG_DIR=" + t.TempDir()}
-		f := a.Claude.(*fake)
 		tc.setup(t, a, f)
 
 		fs := a.Doctor()
@@ -147,7 +147,7 @@ func TestDoctorNoLogins(t *testing.T) {
 }
 
 func TestDoctorStray(t *testing.T) {
-	a := healthy(t)
+	a, _ := healthy(t)
 	cfg := t.TempDir()
 	a.Env = []string{"PATH=/bin", "CLAUDE_CONFIG_DIR=" + cfg}
 	if err := os.WriteFile(filepath.Join(cfg, ".credentials.json"), []byte("{}"), 0o600); err != nil {
