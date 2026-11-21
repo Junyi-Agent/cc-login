@@ -15,7 +15,7 @@ Install (macOS or Linux; the binary goes to `~/.local/bin`):
 curl -fsSL https://raw.githubusercontent.com/Junyi-Agent/cc-login/main/install.sh | sh
 ```
 
-Add a login (cc-login runs `claude setup-token`, then asks you to paste the token):
+Add a login (cc-login opens a sign-in link in the browser, then asks you to paste the code it shows):
 
 ```sh
 cc-login add work

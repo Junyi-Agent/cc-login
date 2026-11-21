@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Junyi-Agent/cc-login/internal/claude"
+	"github.com/Junyi-Agent/cc-login/internal/oauth"
 	"github.com/Junyi-Agent/cc-login/internal/state"
 )
 
@@ -51,16 +52,31 @@ func TestRenew(t *testing.T) {
 		}
 	})
 
-	t.Run("a token: a new one, a new expiry, the same account", func(t *testing.T) {
+	t.Run("a token: a new one, a new expiry, the token's account and scopes", func(t *testing.T) {
 		f := &fake{status: map[string]claude.AuthInfo{}}
 		a := addApp(t, logins(), "a1", f)
 
-		res, err := a.Renew(ctx, "ci", nil, &prompts{secrets: []string{goodToken}})
+		res, err := a.Renew(ctx, "ci", nil, &prompts{secrets: []string{goodCode}})
 		if err != nil {
 			t.Fatal(err)
 		}
-		if res.ExpiresAt.Sub(now) != tokenLife || res.Account != "ci@example.com" {
+		if res.ExpiresAt.Sub(now) != oauth.Life || res.Account != "tok@example.com" {
 			t.Errorf("result = %+v", res)
+		}
+		if _, l, _ := load(t, a).ByName("ci"); len(l.Scopes) != 2 {
+			t.Errorf("login = %+v; want the scopes", l)
+		}
+	})
+
+	t.Run("a refused code changes nothing", func(t *testing.T) {
+		f := &fake{status: map[string]claude.AuthInfo{}}
+		a := addApp(t, logins(), "a1", f)
+
+		if _, err := a.Renew(ctx, "ci", nil, &prompts{secrets: []string{"bad-code-123#s"}}); err == nil {
+			t.Fatal("want an error")
+		}
+		if _, l, _ := load(t, a).ByName("ci"); l.Account != "ci@example.com" || l.Scopes != nil {
+			t.Errorf("login = %+v; want it unchanged", l)
 		}
 	})
 

@@ -22,7 +22,7 @@ type Kind string
 // The kinds of login.
 const (
 	SignIn Kind = "sign-in" // claude auth login; Claude Code stores the sign-in
-	Token  Kind = "token"   // a token from claude setup-token, in creds.TokenFile
+	Token  Kind = "token"   // an OAuth token, in creds.TokenFile (ADR 0017)
 	APIKey Kind = "api-key" // an Anthropic API key, in creds.APIKeyFile
 )
 
@@ -35,7 +35,8 @@ type Login struct {
 	Plan           string     `json:"plan,omitempty"`     // claude's subscriptionType: pro, max, team...
 	KeyHint        string     `json:"key_hint,omitempty"` // an API key's last 4 characters
 	CreatedAt      time.Time  `json:"created_at"`
-	TokenExpiresAt *time.Time `json:"token_expires_at,omitempty"` // a token login: a year after it was saved
+	TokenExpiresAt *time.Time `json:"token_expires_at,omitempty"` // a token login: when its token expires
+	Scopes         []string   `json:"scopes,omitempty"`           // a token login's OAuth scopes; none for a token from claude setup-token
 }
 
 // State is state.json.

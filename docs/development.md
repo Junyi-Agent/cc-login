@@ -43,8 +43,9 @@ git tag v0.2.0 origin/main && git push origin v0.2.0
 |---|---|
 | `internal/state` | the data root: `state.json` (load, update under the lock), where each credentials directory is |
 | `internal/creds` | what a credentials directory holds: a key or token file, a sign-in's access token (`.credentials.json` or the Keychain), and the environment of a claude run with one login |
-| `internal/claude` | find claude; run `claude auth status`, `login`, `logout` and `claude setup-token` |
-| `internal/anthropic` | the Anthropic API: the plan quota, checking a key or token |
+| `internal/claude` | find claude; run `claude auth status`, `login` and `logout` |
+| `internal/anthropic` | the Anthropic API: the plan quota, checking a key |
+| `internal/oauth` | a token login's sign-in: the link, and the trade of the pasted code for a token |
 | `internal/app` | what each command does, one file per command; no output, no cobra |
 | `internal/ui` | the table and the JSON of `list` |
 | `cmd/cc-login` | the command line (cobra): one file per command, with its help and what it prints |
@@ -68,4 +69,6 @@ The code of a command is in `cmd/cc-login/<command>.go` and
    checks the link~~ ([ADR 0013](adr/0013-first-run.md))
 8. ~~simplify more: no token organization, leaner renew, one expiry column,
    confirmations on stderr~~ ([ADR 0015](adr/0015-simplify-more.md))
-9. `cc-login tui` (ADR 0006)
+9. ~~a token login signs in with OAuth itself, with `user:profile`~~
+   ([ADR 0017](adr/0017-own-oauth.md))
+10. `cc-login tui` (ADR 0006)

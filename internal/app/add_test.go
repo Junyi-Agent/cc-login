@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,6 +10,7 @@ import (
 	"github.com/Junyi-Agent/cc-login/internal/anthropic"
 	"github.com/Junyi-Agent/cc-login/internal/claude"
 	"github.com/Junyi-Agent/cc-login/internal/creds"
+	"github.com/Junyi-Agent/cc-login/internal/oauth"
 	"github.com/Junyi-Agent/cc-login/internal/state"
 )
 
@@ -20,13 +20,13 @@ func TestAddNew(t *testing.T) {
 	t.Run("a token, the first login: the default", func(t *testing.T) {
 		f := &fake{status: map[string]claude.AuthInfo{}}
 		a := addApp(t, map[string]*state.Login{}, "", f)
-		p := &prompts{secrets: []string{goodToken}, lines: []string{"me@example.com"}}
+		p := &prompts{secrets: []string{goodCode}}
 
 		res, err := a.Add(ctx, "ci", state.Token, nil, p)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !res.BecameDefault || res.ExpiresAt.Sub(now) != tokenLife {
+		if !res.BecameDefault || res.ExpiresAt.Sub(now) != oauth.Life || res.Account != "tok@example.com" {
 			t.Errorf("result = %+v", res)
 		}
 
@@ -35,7 +35,8 @@ func TestAddNew(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if l.Kind != state.Token || l.Account != "me@example.com" || l.TokenExpiresAt == nil {
+		if l.Kind != state.Token || l.Account != "tok@example.com" || l.TokenExpiresAt == nil ||
+			strings.Join(l.Scopes, " ") != "user:inference user:profile" {
 			t.Errorf("login = %+v", l)
 		}
 
@@ -82,7 +83,7 @@ func TestAddNew(t *testing.T) {
 	})
 }
 
-// A rejected key or token, or a bad paste, saves nothing and leaves no
+// A rejected key or code, or a bad paste, saves nothing and leaves no
 // directory behind.
 func TestAddRejected(t *testing.T) {
 	cases := []struct {
@@ -92,9 +93,9 @@ func TestAddRejected(t *testing.T) {
 		want   string
 	}{
 		{"rejected key", state.APIKey, "sk-ant-api03-bad-key", "rejected the key"},
-		{"rejected token", state.Token, "sk-ant-oat01-bad-token", "rejected the token"},
+		{"refused code", state.Token, "bad-code-123#any-state", "invalid_grant"},
 		{"not a key", state.APIKey, "hello", "not a sk-ant-"},
-		{"a key for a token", state.Token, goodKey, "not a sk-ant-oat"},
+		{"a token for a code", state.Token, goodToken, "not the code"},
 	}
 
 	for _, tc := range cases {
@@ -131,55 +132,29 @@ func TestAddUnchecked(t *testing.T) {
 	}
 }
 
-// At a terminal, add runs claude setup-token in the new login's directory,
-// with no credentials of the shell, then reads the pasted token. A failed
-// claude still lets a token be pasted; Ctrl-C saves nothing. Without a
-// terminal claude setup-token does not run.
-func TestAddTokenRunsSetupToken(t *testing.T) {
-	cases := []struct {
-		name     string
-		terminal bool
-		setupErr error
-		wantRun  bool
-		wantErr  string
-		wantNote string
-	}{
-		{"at a terminal", true, nil, true, "", "Running claude setup-token"},
-		{"claude fails", true, errors.New("exit status 1"), true, "", "run it in another terminal"},
-		{"Ctrl-C", true, claude.ErrStopped, true, "claude setup-token: stopped", ""},
-		{"no terminal", false, nil, false, "", "run in a terminal"},
+// A token login shows the sign-in link and opens it, then reads the code.
+// No code (Ctrl-C, empty stdin) saves nothing.
+func TestAddTokenSignIn(t *testing.T) {
+	f := &fake{status: map[string]claude.AuthInfo{}}
+	a := addApp(t, map[string]*state.Login{}, "", f)
+	p := &prompts{secrets: []string{goodCode}}
+
+	if _, err := a.Add(context.Background(), "ci", state.Token, nil, p); err != nil {
+		t.Fatal(err)
+	}
+	if len(p.opened) != 1 || !strings.Contains(p.opened[0], "scope=user%3Ainference%20user%3Aprofile") {
+		t.Fatalf("opened %q; want the sign-in link", p.opened)
+	}
+	if !strings.Contains(strings.Join(p.notes, "\n"), p.opened[0]) {
+		t.Errorf("notes %q; want the link", p.notes)
 	}
 
-	for _, tc := range cases {
-		var ran bool
-		var env []string
-		f := &fake{status: map[string]claude.AuthInfo{}, setup: func(e []string) error {
-			ran, env = true, e
-			return tc.setupErr
-		}}
-		a := addApp(t, map[string]*state.Login{}, "", f)
-		p := &prompts{secrets: []string{goodToken}, terminal: tc.terminal}
-
-		_, err := a.Add(context.Background(), "ci", state.Token, nil, p)
-
-		switch {
-		case tc.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErr)):
-			t.Errorf("%s: %v; want %q", tc.name, err, tc.wantErr)
-		case tc.wantErr == "" && err != nil:
-			t.Errorf("%s: %v", tc.name, err)
-		}
-		if ran != tc.wantRun {
-			t.Errorf("%s: setup-token ran %t; want %t", tc.name, ran, tc.wantRun)
-		}
-		if ran && (lookup(env, "ANTHROPIC_API_KEY") != "" || lookup(env, "CLAUDE_SECURESTORAGE_CONFIG_DIR") == "") {
-			t.Errorf("%s: setup-token env %q; want the login's directory and no key", tc.name, env)
-		}
-		if tc.wantNote != "" && !strings.Contains(strings.Join(p.notes, "\n"), tc.wantNote) {
-			t.Errorf("%s: notes %q; want %q", tc.name, p.notes, tc.wantNote)
-		}
-		if logins := len(load(t, a).Logins); (tc.wantErr == "") != (logins == 1) {
-			t.Errorf("%s: %d logins saved", tc.name, logins)
-		}
+	p = &prompts{}
+	if _, err := a.Add(context.Background(), "ci2", state.Token, nil, p); err == nil {
+		t.Error("no code: want an error")
+	}
+	if _, _, err := load(t, a).ByName("ci2"); err == nil {
+		t.Error("no code: the login was saved")
 	}
 }
 
@@ -199,7 +174,7 @@ func TestAddExisting(t *testing.T) {
 	for _, tc := range cases {
 		a, _ := three(t)
 
-		_, err := a.Add(context.Background(), tc.name, tc.kind, nil, &prompts{secrets: []string{goodToken}})
+		_, err := a.Add(context.Background(), tc.name, tc.kind, nil, &prompts{secrets: []string{goodCode}})
 		if err == nil || !strings.Contains(err.Error(), "cc-login renew "+tc.name) {
 			t.Errorf("add %s %s = %v; want the renew hint", tc.name, tc.kind, err)
 		}

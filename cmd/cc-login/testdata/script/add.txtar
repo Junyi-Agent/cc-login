@@ -1,33 +1,40 @@
-# Without a terminal the token is a line of stdin. The API is unreachable in
-# tests, so the token is saved unchecked.
-stdin token
-exec cc-login add ci
-! stdout .
-stderr 'Added login ci\.'
-stderr 'The token expires about'
-stderr 'It is the default login\.'
-stderr 'claude setup-token'
-stderr 'saving it unchecked'
-! stderr 'fake-token'
-exec cc-login run
-stdout 'dir .*; key false; token true'
+# A token login prints the sign-in link; without a terminal the code is a
+# line of stdin. A code of another sign-in is refused before any request,
+# and neither it nor a login is left behind. (The trade of a good code is
+# tested in internal/app and internal/oauth.)
+stdin code
+! exec cc-login add ci
+stderr 'Open this link, choose the account of login ci'
+stderr '^https://claude.com/cai/oauth/authorize\?.*scope=user%3Ainference%20user%3Aprofile'
+stderr 'the code is from another sign-in'
+! stderr 'c0de-xyz'
+exec cc-login list
+stdout 'No logins yet'
 
-# A key, after the first login: not the default.
+# A key, the first login: the default. The API is unreachable in tests, so
+# the key is saved unchecked.
 stdin key
 exec cc-login add api --api-key
-stderr 'Make it the default with: cc-login use api'
+! stdout .
+stderr 'Added login api\.'
+stderr 'It is the default login\.'
+stderr 'saving it unchecked'
+! stderr 'fake-wxyz'
 exec cc-login list
-stdout '^  api +API key …wxyz +api '
+stdout '^▸ api +API key …wxyz +api '
+exec cc-login run
+stdout 'dir .*; key true; token false'
 
-# A sign-in through claude auth login, options after --.
+# A sign-in through claude auth login, options after --; not the default.
 exec cc-login add home --sign-in -- --email new@example.com
 stdout 'Login successful'
 stderr 'Added login home \(new@example.com\)'
+stderr 'Make it the default with: cc-login use home'
 
 # Already there.
-stdin token
-! exec cc-login add ci
-stderr 'cc-login renew ci'
+stdin key
+! exec cc-login add api --api-key
+stderr 'cc-login renew api'
 ! exec cc-login add home --sign-in
 stderr 'login home exists'
 ! exec cc-login add bad --api-key
@@ -53,8 +60,8 @@ stderr 'into login stray'
 exec cc-login list
 ! stderr 'adopt'
 
--- token --
-sk-ant-oat01-fake-token
+-- code --
+c0de-xyz#not-this-sign-in
 -- key --
 sk-ant-api03-fake-wxyz
 -- creds --

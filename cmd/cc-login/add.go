@@ -13,11 +13,13 @@ func (c *cli) addCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add NAME [--sign-in [-- OPTS...] | --api-key | --oauth-token]",
 		Short: "Save a new login NAME",
-		Long: `Save a new login NAME. Without an option, run claude setup-token on this
-terminal, then read the token it prints (sk-ant-oat...), shown as *, and check
-it with the Anthropic API; it lasts a year. The new login becomes the default when the machine has none.
+		Long: `Save a new login NAME. Without an option, sign in with OAuth: cc-login prints a
+link and opens it in the browser; choose the account, allow access, and paste
+the code the page shows (CODE#STATE), shown as *. The token lasts a year, and
+claude can read its account. The new login becomes the default when the
+machine has none.
 
-Without a terminal, the key or token is one line of stdin.`,
+Without a terminal, the key or code is one line of stdin.`,
 		Example: `  cc-login add work
   cc-login add work --sign-in -- --email me@example.com
   cc-login add ci --api-key`,
@@ -36,7 +38,7 @@ Without a terminal, the key or token is one line of stdin.`,
 
 	cmd.Flags().Bool("sign-in", false, "sign in with claude auth login, which keeps the sign-in in the macOS Keychain; its options go after --")
 	cmd.Flags().Bool("api-key", false, "save an Anthropic API key (sk-ant-...), shown as * while typed, and checked with the Anthropic API")
-	cmd.Flags().Bool("oauth-token", false, "save a token from claude setup-token (the default)")
+	cmd.Flags().Bool("oauth-token", false, "sign in with OAuth in the browser and save the token (the default)")
 	cmd.MarkFlagsMutuallyExclusive("sign-in", "api-key", "oauth-token")
 	return cmd
 }

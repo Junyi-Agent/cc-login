@@ -1,5 +1,5 @@
 // Package claude finds the claude CLI and runs its auth commands
-// (claude auth status, login, logout, setup-token) in the environment it is
+// (claude auth status, login, logout) in the environment it is
 // given; package creds makes that environment.
 package claude
 
@@ -51,15 +51,6 @@ func (CLI) AuthLogout(ctx context.Context, env []string) error {
 		return err
 	}
 	return AuthLogout(ctx, path, env)
-}
-
-// SetupToken runs claude setup-token (SetupToken) with env.
-func (CLI) SetupToken(ctx context.Context, env []string) error {
-	path, err := Find()
-	if err != nil {
-		return err
-	}
-	return SetupToken(ctx, path, env)
 }
 
 // InPath is what a plain claude runs (InPath).
@@ -234,18 +225,6 @@ func AuthLogin(ctx context.Context, path string, env, args []string) error {
 	err = cmd.Wait()
 	_ = w.Close()
 	return stopped(ctx, err)
-}
-
-// SetupToken runs `claude setup-token` with env on this terminal: a browser
-// opens, and claude prints a token for the user to paste into cc-login.
-// claude keeps nothing of it.
-func SetupToken(ctx context.Context, path string, env []string) error {
-	cmd := exec.CommandContext(ctx, path, "setup-token")
-	cmd.Env = env
-	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
-	cmd.Cancel = func() error { return cmd.Process.Signal(syscall.SIGTERM) }
-
-	return stopped(ctx, cmd.Run())
 }
 
 // stopped is err, or ErrStopped when ctx was cancelled (Ctrl-C): claude

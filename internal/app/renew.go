@@ -10,7 +10,7 @@ import (
 )
 
 // Renew signs login name in again, also while it is signed in, so that it
-// expires later; for a token login it saves a new token. The credentials
+// expires later; for a token login it saves a new OAuth token. The credentials
 // directory stays the same, so the login stays the default if it was.
 func (a *App) Renew(ctx context.Context, name string, args []string, p Prompter) (Saved, error) {
 	st, err := a.Store.Load()
@@ -27,7 +27,7 @@ func (a *App) Renew(ctx context.Context, name string, args []string, p Prompter)
 	case old.Kind == state.APIKey:
 		return Saved{}, fmt.Errorf("an API key does not expire; to change it, remove login %s and add it again", name)
 	case old.Kind == state.Token && len(args) > 0:
-		return Saved{}, errors.New("a token login takes no options for claude: renew saves a new token from claude setup-token")
+		return Saved{}, errors.New("a token login takes no options for claude: renew signs it in again in the browser")
 	}
 
 	l := *old

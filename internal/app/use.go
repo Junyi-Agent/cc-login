@@ -20,7 +20,7 @@ func (a *App) Use(ctx context.Context, name string) error {
 		return err
 	}
 
-	env, err := a.env(id, l.Kind)
+	env, err := a.env(id, l)
 	if err != nil {
 		return err
 	}

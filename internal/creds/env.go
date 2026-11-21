@@ -14,30 +14,35 @@ import (
 var credVars = []string{
 	"CLAUDE_SECURESTORAGE_CONFIG_DIR",
 	"ANTHROPIC_API_KEY",
-	"CLAUDE_CODE_OAUTH_TOKEN",
+	"CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CODE_OAUTH_SCOPES",
 	"CC_LOGIN_ID", "CC_LOGIN_DEPTH",
 }
 
-// Env is base with the credentials of one login: its directory, and for an
-// API key or token login the key or token. The secret goes only into the
-// environment, never into argv.
-func Env(base []string, dir string, kind state.Kind) ([]string, error) {
+// Env is base with the credentials of login l, whose directory is dir: the
+// directory, and for an API key or token login the key or token. A token
+// login also says its scopes, so that claude reads the account when the
+// token may (ADR 0017). The secret goes only into the environment, never
+// into argv.
+func Env(base []string, dir string, l *state.Login) ([]string, error) {
 	env := StoredEnv(base, dir)
 
-	switch kind {
+	switch l.Kind {
 	case state.APIKey:
-		k, err := Secret(dir, kind)
+		k, err := Secret(dir, l.Kind)
 		if err != nil {
 			return nil, err
 		}
 		env = append(env, "ANTHROPIC_API_KEY="+k)
 
 	case state.Token:
-		t, err := Secret(dir, kind)
+		t, err := Secret(dir, l.Kind)
 		if err != nil {
 			return nil, err
 		}
 		env = append(env, "CLAUDE_CODE_OAUTH_TOKEN="+t)
+		if len(l.Scopes) > 0 {
+			env = append(env, "CLAUDE_CODE_OAUTH_SCOPES="+strings.Join(l.Scopes, " "))
+		}
 
 	case state.SignIn:
 	}

@@ -43,7 +43,7 @@ func (a *App) Run(name string) (Exec, error) {
 		return Exec{}, err
 	}
 
-	env, err := a.env(id, l.Kind)
+	env, err := a.env(id, l)
 	if err != nil {
 		return Exec{}, err
 	}
