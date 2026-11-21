@@ -29,6 +29,7 @@ type fake struct {
 	statusTo map[string][]string // the env each AuthStatus got, by directory
 
 	pathErr error                          // Path fails with it
+	setup   func(env []string) error       // claude setup-token; nil does nothing
 	login   func(env, args []string) error // claude auth login; nil does nothing
 	logout  func(env []string) error       // claude auth logout; nil does nothing
 }
@@ -63,6 +64,15 @@ func (f *fake) AuthLogout(_ context.Context, env []string) error {
 	}
 	return f.logout(env)
 }
+
+func (f *fake) SetupToken(_ context.Context, env []string) error {
+	if f.setup == nil {
+		return nil
+	}
+	return f.setup(env)
+}
+
+func (f *fake) InPath() (string, bool) { return "/bin/claude", false }
 
 // newApp makes an App over a temporary root with these logins (by ID).
 func newApp(t *testing.T, logins map[string]*state.Login, def string, f *fake) *App {
@@ -140,10 +150,12 @@ func load(t *testing.T, a *App) *state.State {
 	return st
 }
 
-// prompts is a Prompter that answers from lists and keeps the notes.
+// prompts is a Prompter that answers from lists and keeps the notes. It is
+// at a terminal when terminal is set.
 type prompts struct {
 	secrets, lines []string
 	notes          []string
+	terminal       bool // Terminal says so
 }
 
 func (p *prompts) Secret(_, _ string, _ func(string) error) (string, error) {
@@ -165,6 +177,8 @@ func (p *prompts) Line(_, _ string) (string, error) {
 }
 
 func (p *prompts) Note(msg string) { p.notes = append(p.notes, msg) }
+
+func (p *prompts) Terminal() bool { return p.terminal }
 
 // Fake values that the fake API accepts.
 const (

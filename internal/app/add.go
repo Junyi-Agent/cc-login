@@ -158,9 +158,12 @@ func (a *App) saveKey(ctx context.Context, dir string, l *state.Login, p Prompte
 // and saves it. A token cannot read its account, so it asks for one to show
 // when the login has none.
 func (a *App) saveToken(ctx context.Context, dir string, l *state.Login, p Prompter) error {
-	p.Note("In another terminal run: claude setup-token. A browser opens; choose the account of login " + l.Name + ", then paste the token it prints (sk-ant-oat...).")
+	if err := a.setupToken(ctx, dir, l.Name, p); err != nil {
+		return err
+	}
+
 	valid := validPrefix("sk-ant-oat")
-	tok, err := p.Secret("Token for "+l.Name, "From claude setup-token; it shows as *.", valid)
+	tok, err := p.Secret("Token for "+l.Name, "The token claude setup-token printed (sk-ant-oat...); it shows as *.", valid)
 	if err != nil {
 		return err
 	}
@@ -193,6 +196,29 @@ func (a *App) saveToken(ctx context.Context, dir string, l *state.Login, p Promp
 	now := a.Now().UTC()
 	expires := now.Add(tokenLife)
 	l.TokenSavedAt, l.TokenExpiresAt = &now, &expires
+	return nil
+}
+
+// setupToken runs claude setup-token on the user's terminal for login name,
+// so the token to paste is on the screen. Without a terminal it says where
+// the token comes from: claude setup-token needs one. When claude fails, a
+// token from a run elsewhere can still be pasted.
+func (a *App) setupToken(ctx context.Context, dir, name string, p Prompter) error {
+	if !p.Terminal() {
+		p.Note("The token comes from claude setup-token, run in a terminal: choose the account of login " + name + " in the browser it opens.")
+		return nil
+	}
+
+	p.Note("Running claude setup-token: a browser opens; choose the account of login " + name + ", then paste the token it prints.")
+	a.Log.Debug("claude setup-token", "login", name)
+	err := a.Claude.SetupToken(ctx, creds.StoredEnv(a.Env, dir))
+
+	switch {
+	case errors.Is(err, claude.ErrStopped):
+		return fmt.Errorf("claude setup-token: %w", err)
+	case err != nil:
+		p.Note(fmt.Sprintf("claude setup-token failed (%v); run it in another terminal and paste the token it prints.", err))
+	}
 	return nil
 }
 

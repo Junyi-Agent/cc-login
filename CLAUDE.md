@@ -1,6 +1,6 @@
 # cc-login (Go)
 
-一台机器上管理多个 Claude Code 登录，claude 由 cc-login 用 exec 启动。最初是 `cc-login.zsh` 的 Go 移植，现在独立设计，不再与 zsh 版兼容（2026-11-21 用户决定）。用法和进度见 [[README]]，设计见 `docs/adr/`（0006–0012）。
+一台机器上管理多个 Claude Code 登录，claude 由 cc-login 用 exec 启动。最初是 `cc-login.zsh` 的 Go 移植，现在独立设计，不再与 zsh 版兼容（2026-11-21 用户决定）。用法和进度见 [[README]]，设计见 `docs/adr/`（0006–0013）。
 
 ## 开发流程
 

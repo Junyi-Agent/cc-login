@@ -5,6 +5,7 @@ import "errors"
 // Errors of the commands. A login that does not exist is state.ErrNoLogin.
 var (
 	ErrNoDefault = errors.New("no default login; choose one with: cc-login use NAME")
+	ErrNoLogins  = errors.New("no logins yet; add one with: cc-login add NAME")
 	ErrCancelled = errors.New("nothing changed")
 
 	// ErrStaleToken means the sign-in's access token has expired, so list

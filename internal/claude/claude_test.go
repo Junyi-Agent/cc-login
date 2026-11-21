@@ -53,6 +53,19 @@ func TestFind(t *testing.T) {
 		t.Errorf("Find = %q, %v; want to skip the link to itself", p, err)
 	}
 
+	// InPath is what a plain claude runs: the link, which is this program.
+	if p, linked := InPath(); p != filepath.Join(link, "claude") || !linked {
+		t.Errorf("InPath = %q, %t; want the link", p, linked)
+	}
+	t.Setenv("PATH", strings.Join([]string{good, link}, string(os.PathListSeparator)))
+	if p, linked := InPath(); p != filepath.Join(good, "claude") || linked {
+		t.Errorf("InPath = %q, %t; want the claude before the link", p, linked)
+	}
+	t.Setenv("PATH", notExec)
+	if p, linked := InPath(); p != "" || linked {
+		t.Errorf("InPath = %q, %t; want none", p, linked)
+	}
+
 	t.Setenv("CC_LOGIN_CLAUDE", "/opt/claude")
 	if p, err := Find(); err != nil || p != "/opt/claude" {
 		t.Errorf("Find = %q, %v; want CC_LOGIN_CLAUDE", p, err)

@@ -23,7 +23,7 @@
 |---|---|
 | `internal/state` | 数据根目录：`state.json` 的读写和锁、凭据目录的路径（`Store.Dir`、`NewDir`）、`WriteAtomic`、login 名字的规则 |
 | `internal/creds` | 凭据目录里面的东西：key/token 文件（名字、读、写）、sign-in 的 access token（文件或 Keychain）、把一个 login 的凭据变成 claude 的环境（`Env`、`StoredEnv`、要清掉的变量表） |
-| `internal/claude` | 找 claude、运行 `claude auth status|login|logout`；不再碰凭据文件 |
+| `internal/claude` | 找 claude、运行 `claude auth status|login|logout` 和 `claude setup-token`；不再碰凭据文件 |
 | `internal/anthropic` | Anthropic API：检查 key 和 token、读配额 |
 | `internal/app` | 每个命令一个函数，不写 stdout、不依赖 cobra |
 | `internal/ui` | list 的表格和 JSON |

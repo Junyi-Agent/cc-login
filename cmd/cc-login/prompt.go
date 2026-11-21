@@ -64,6 +64,9 @@ func (p *prompter) Line(title, help string) (string, error) {
 	return strings.TrimSpace(v), err
 }
 
+// Terminal says whether stdin is a terminal.
+func (p *prompter) Terminal() bool { return terminal() }
+
 // Note is a line for the user on stderr.
 func (p *prompter) Note(msg string) {
 	_, _ = fmt.Fprintln(p.c.err, msg)
