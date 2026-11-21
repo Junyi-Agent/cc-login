@@ -5,12 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"os"
 	"strings"
 	"time"
-
-	"github.com/Junyi-Agent/cc-login/internal/quota"
 )
 
 // Client calls the API at BaseURL.
@@ -29,70 +28,54 @@ func New() *Client {
 	return &Client{HTTP: &http.Client{}, BaseURL: base}
 }
 
-type usageWindow struct {
-	Utilization *float64 `json:"utilization"`
-	ResetsAt    *string  `json:"resets_at"`
+// Window is one quota window of a plan.
+type Window struct {
+	Used     *float64   `json:"utilization"` // percent used; nil when unknown
+	ResetsAt *time.Time `json:"resets_at"`   // nil when unknown
 }
 
-type usageResponse struct {
-	FiveHour *usageWindow `json:"five_hour"`
-	SevenDay *usageWindow `json:"seven_day"`
+// Left is the percent left, rounded, 0 to 100; false when the plan has no
+// such window or its use is unknown.
+func (w *Window) Left() (int, bool) {
+	if w == nil || w.Used == nil {
+		return 0, false
+	}
+	return max(0, min(100, 100-int(math.Round(*w.Used)))), true
 }
 
-func (w *usageWindow) window() (quota.Window, error) {
-	if w == nil {
-		return quota.Window{}, nil
-	}
-
-	out := quota.Window{Used: quota.Round(w.Utilization)}
-	if w.ResetsAt != nil {
-		t, err := time.Parse(time.RFC3339Nano, *w.ResetsAt)
-		if err != nil {
-			return quota.Window{}, err
-		}
-		out.ResetsAt = t.UTC()
-	}
-
-	return out, nil
+// Quota is the 5-hour and the weekly window, as claude's /usage shows them;
+// nil for a window the plan does not have.
+type Quota struct {
+	FiveHour *Window `json:"five_hour"`
+	SevenDay *Window `json:"seven_day"`
 }
 
 // Usage reads the plan quota with the OAuth access token of a sign-in, from
 // the endpoint claude's /usage reads (api/oauth/usage, not documented).
-func (c *Client) Usage(ctx context.Context, accessToken string) (quota.Quota, error) {
+func (c *Client) Usage(ctx context.Context, accessToken string) (Quota, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+"/api/oauth/usage", nil)
 	if err != nil {
-		return quota.Quota{}, err
+		return Quota{}, err
 	}
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 	req.Header.Set("anthropic-beta", "oauth-2025-04-20")
 
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
-		return quota.Quota{}, err
+		return Quota{}, err
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 400 {
-		return quota.Quota{}, fmt.Errorf("HTTP %d", resp.StatusCode)
+		return Quota{}, fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
 
-	var u usageResponse
-	if err = json.NewDecoder(resp.Body).Decode(&u); err != nil {
-		return quota.Quota{}, err
-	}
-
-	var q quota.Quota
-	if q.FiveHour, err = u.FiveHour.window(); err != nil {
-		return quota.Quota{}, err
-	}
-	if q.SevenDay, err = u.SevenDay.window(); err != nil {
-		return quota.Quota{}, err
-	}
-
-	return q, nil
+	var q Quota
+	err = json.NewDecoder(resp.Body).Decode(&q)
+	return q, err
 }
 
 // Verdict is what the API said about a key or a token.

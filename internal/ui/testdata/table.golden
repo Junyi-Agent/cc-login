@@ -8,5 +8,4 @@
   stale  -                                -     ?          ?          ● signed in   -
 
   Sign in again with: cc-login renew NAME
-  Quota unknown for stale: the access token expired; a claude run with the login refreshes it: cc-login run NAME
-  Quota unknown for ci: a setup-token token cannot read it; see it in claude with /usage
+  Quota unknown for stale: the access token expired; a claude run with the login refreshes it

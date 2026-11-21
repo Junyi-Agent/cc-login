@@ -16,7 +16,7 @@ data layout, claude launched by exec. Decisions are in
 
 | Command | Status |
 |---|---|
-| `list` | the logins, their status, quota and expiry; `--format json\|tsv\|TEMPLATE` (`--json` = `--format json`) for scripts |
+| `list` | the logins, their status, quota and expiry; `--json` for scripts |
 | `run [NAME] [-- ARGS]` | becomes claude (exec) with one login's credentials; without NAME the login of the surrounding claude, else the default |
 | `use NAME` | makes a signed-in login the default |
 | `rename OLD NEW` | renames; the login stays signed in |
@@ -79,7 +79,7 @@ A sign-in's credentials are kept by Claude Code: in the macOS Keychain, under a
 name made from the directory's path, or in `.credentials.json` in the
 directory. See [ADR 0008](docs/adr/0008-state-json-layout.md).
 
-### `list --format json`
+### `list --json`
 
 ```json
 [
@@ -99,11 +99,9 @@ directory. See [ADR 0008](docs/adr/0008-state-json-layout.md).
 
 `kind` is `sign-in`, `token` or `api-key`; `status` is `signed-in`,
 `expiring` (within a week), `expired` or `signed-out`. The quota is the live
-one, `null` when the API did not return it (no sign-in, an expired access
-token, a token or API key login); other unknown values are `null` too.
-`--format tsv` prints name, default, kind, status, account, plan, expires_at
-and the percent left of the two windows; `--format '{{.Name}}'` applies a Go
-template to each login (the fields of the JSON object, in Go names).
+one, read for sign-in logins only: `null` when there is none (a token or API
+key login, an expired access token, a failed request); other unknown values
+are `null` too.
 
 ## Settings
 
@@ -151,10 +149,9 @@ ADRs) are in [CLAUDE.md](CLAUDE.md); decisions in [docs/adr](docs/adr/README.md)
 | `internal/state` | `state.json`: load, update under the lock |
 | `internal/claude` | find claude, the environment of one login, `claude auth status` |
 | `internal/creds` | a login's key or token file; a sign-in's access token from `.credentials.json` or the Keychain |
-| `internal/anthropic` | the Anthropic API: the plan quota |
-| `internal/quota` | quota windows |
+| `internal/anthropic` | the Anthropic API: the plan quota, checking a key or token |
 | `internal/app` | one function per command; no output, no cobra |
-| `internal/ui` | the table (lipgloss), JSON, TSV and template output |
+| `internal/ui` | the table and the JSON of `list` |
 | `cmd/cc-login` | the command line (cobra) |
 
 ## Plan
@@ -162,7 +159,7 @@ ADRs) are in [CLAUDE.md](CLAUDE.md); decisions in [docs/adr](docs/adr/README.md)
 1. ~~`list`, `list --json`~~
 2. ~~cobra: help, argument checks and completion~~ ([ADR 0006](docs/adr/0006-cobra-and-bubbletea.md))
 3. ~~the new structure: `state.json`, `internal/app`,
-   typed status, lipgloss table, testscript, `list --format`~~ ([ADR 0008](docs/adr/0008-state-json-layout.md),
+   typed status, lipgloss table, testscript~~ ([ADR 0008](docs/adr/0008-state-json-layout.md),
    [ADR 0009](docs/adr/0009-code-structure.md))
 4. ~~`use`, `rename`, `remove`, `run`, and the `claude` link~~
    ([ADR 0007](docs/adr/0007-launch-claude-by-exec.md))

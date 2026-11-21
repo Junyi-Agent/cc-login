@@ -3,18 +3,17 @@
 package ui
 
 import (
+	"cmp"
 	"fmt"
 	"io"
 	"os"
-	"regexp"
 	"strings"
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/lipgloss/table"
 
+	"github.com/Junyi-Agent/cc-login/internal/anthropic"
 	"github.com/Junyi-Agent/cc-login/internal/app"
-	"github.com/Junyi-Agent/cc-login/internal/quota"
 	"github.com/Junyi-Agent/cc-login/internal/state"
 )
 
@@ -107,97 +106,58 @@ func Table(w io.Writer, views []app.View, opt Options) error {
 	return notes(w, views, s)
 }
 
-// fit draws the table within width: without the date column first, then
-// with shorter accounts.
+// fit draws the table, without the date column when it is wider than width
+// (0 for no limit).
 func fit(rows [][]cell, s styles, width int) string {
-	out := draw(rows, s, true)
-	if width <= 0 || lipgloss.Width(out) <= width {
-		return out
-	}
-
-	out = draw(rows, s, false)
-	over := lipgloss.Width(out) - width
-	if over <= 0 {
-		return out
-	}
-
-	longest := 0
-	for _, r := range rows {
-		longest = max(longest, lipgloss.Width(r[colAccount].text))
-	}
-	limit := max(longest-over, 8)
-	for _, r := range rows {
-		r[colAccount].text = truncate(r[colAccount].text, limit)
-	}
-
-	return draw(rows, s, false)
-}
-
-// draw renders the rows as a table with no borders and two spaces between
-// columns.
-func draw(rows [][]cell, s styles, withDate bool) string {
-	n := nCols
-	if !withDate {
-		n = colDate
-	}
-
-	t := table.New().
-		BorderTop(false).BorderBottom(false).BorderLeft(false).BorderRight(false).
-		BorderHeader(false).BorderColumn(false).
-		Headers(headers[:n]...)
-
-	for _, r := range rows {
-		texts := make([]string, n)
-		for c := range n {
-			texts[c] = r[c].text
-		}
-		t.Row(texts...)
-	}
-
-	t.StyleFunc(func(row, col int) lipgloss.Style {
-		var st lipgloss.Style
-		if row == table.HeaderRow {
-			st = s.dim
-		} else {
-			st = rows[row][col].style
-		}
-
-		if col < n-1 {
-			st = st.PaddingRight(2)
-		}
-		if col == colMark {
-			st = st.PaddingRight(1)
-		}
-		return st
-	})
-
-	lines := strings.Split(strings.TrimRight(t.Render(), "\n"), "\n")
-	for i, l := range lines {
-		lines[i] = trimEnd(l)
-	}
-	return strings.Join(lines, "\n")
-}
-
-// trailing is the padding lipgloss adds to the end of a row: spaces, and the
-// color codes around them.
-var trailing = regexp.MustCompile(`(?:[ ]|\x1b\[[0-9;]*m)+$`)
-
-// trimEnd drops the padding at the end of line; a colored line still ends
-// with a reset.
-func trimEnd(line string) string {
-	out := trailing.ReplaceAllString(line, "")
-	if strings.Contains(out, "\x1b[") {
-		out += "\x1b[0m"
+	out := draw(rows, s, nCols)
+	if width > 0 && lipgloss.Width(out) > width {
+		out = draw(rows, s, colDate)
 	}
 	return out
+}
+
+// draw lays out the first n columns of the rows under the headers: each
+// column as wide as its widest cell, two spaces between columns, one after
+// the default mark.
+func draw(rows [][]cell, s styles, n int) string {
+	head := make([]cell, n)
+	for c := range n {
+		head[c] = cell{text: headers[c], style: s.dim}
+	}
+	all := append([][]cell{head}, rows...)
+
+	widths := make([]int, n)
+	for _, r := range all {
+		for c := range n {
+			widths[c] = max(widths[c], lipgloss.Width(r[c].text))
+		}
+	}
+
+	lines := make([]string, len(all))
+	for i, r := range all {
+		var b strings.Builder
+		for c := range n {
+			if r[c].text != "" {
+				b.WriteString(r[c].style.Render(r[c].text))
+			}
+
+			gap := 2
+			if c == colMark {
+				gap = 1
+			}
+			b.WriteString(strings.Repeat(" ", widths[c]-lipgloss.Width(r[c].text)+gap))
+		}
+		lines[i] = strings.TrimRight(b.String(), " ")
+	}
+	return strings.Join(lines, "\n")
 }
 
 // viewRow is the row of login v.
 func viewRow(v app.View, s styles, now time.Time) []cell {
 	row := make([]cell, nCols)
 	row[colName] = cell{text: v.Name}
-	row[colAccount] = cell{text: orDash(v.Account)}
-	row[colPlan] = cell{text: orDash(v.Plan)}
+	row[colAccount] = cell{text: cmp.Or(v.Account, "-")}
+	row[colPlan] = cell{text: cmp.Or(v.Plan, "-")}
 
 	if v.Default {
 		row[colMark] = cell{text: "▸", style: s.accent}
@@ -225,29 +185,30 @@ func statusText(v app.View) string {
 }
 
 // quotaCells are the 5-hour and weekly cells: the percent left and when the
-// window resets; "?" when the request failed or the access token expired.
+// window resets; "?" when reading the quota failed.
 func quotaCells(v app.View, s styles) (cell, cell) {
 	switch {
-	case v.HasQuota:
+	case v.Quota != nil:
 		return windowCell(v.Quota.FiveHour, "15:04", s), windowCell(v.Quota.SevenDay, "01-02", s)
-	case v.QuotaGap == app.GapStale || v.QuotaGap == app.GapError:
+	case v.QuotaErr != nil:
 		return cell{text: "?"}, cell{text: "?"}
 	}
 	return cell{text: "-"}, cell{text: "-"}
 }
 
 // windowCell is one quota window: red at 20% left or less, yellow at 50%.
-func windowCell(w quota.Window, layout string, s styles) cell {
-	if w.Used == nil {
+func windowCell(w *anthropic.Window, layout string, s styles) cell {
+	left, ok := w.Left()
+	if !ok {
 		return cell{text: "-"}
 	}
 
-	c := cell{text: fmt.Sprintf("%d%%", w.Left())}
-	if !w.ResetsAt.IsZero() {
+	c := cell{text: fmt.Sprintf("%d%%", left)}
+	if w.ResetsAt != nil {
 		c.text += " " + w.ResetsAt.Local().Format(layout)
 	}
 
-	switch left := w.Left(); {
+	switch {
 	case left <= 20:
 		c.style = s.bad
 	case left <= 50:
@@ -297,26 +258,10 @@ func Ago(d time.Duration) string {
 	return fmt.Sprintf("%dd", int(d/(24*time.Hour)))
 }
 
-func orDash(s string) string {
-	if s == "" {
-		return "-"
-	}
-	return s
-}
-
-// truncate cuts s to n characters, ending with "…" when it cut.
-func truncate(s string, n int) string {
-	r := []rune(s)
-	if len(r) <= n {
-		return s
-	}
-	return string(r[:n-1]) + "…"
-}
-
 // notes writes the lines under the table: what to do about logins that
 // need it, and why a quota is unknown.
 func notes(w io.Writer, views []app.View, s styles) error {
-	var renew, stale, failed, token []string
+	var renew, quota []string
 	hasDefault := false
 
 	for _, v := range views {
@@ -324,15 +269,8 @@ func notes(w io.Writer, views []app.View, s styles) error {
 		if v.Status != app.SignedIn && v.Kind != state.APIKey {
 			renew = append(renew, v.Name)
 		}
-
-		switch v.QuotaGap {
-		case app.GapStale:
-			stale = append(stale, v.Name)
-		case app.GapError:
-			failed = append(failed, v.Name)
-		case app.GapToken:
-			token = append(token, v.Name)
-		case app.GapNone, app.GapNoLogin:
+		if v.QuotaErr != nil {
+			quota = append(quota, s.dim.Render("Quota unknown for "+v.Name+": "+v.QuotaErr.Error()))
 		}
 	}
 
@@ -344,15 +282,7 @@ func notes(w io.Writer, views []app.View, s styles) error {
 	default:
 		lines = append(lines, s.dim.Render("Sign in again with:")+" cc-login renew NAME")
 	}
-	if len(stale) > 0 {
-		lines = append(lines, s.dim.Render("Quota unknown for "+strings.Join(stale, ", ")+": the access token expired; a claude run with the login refreshes it:")+" cc-login run NAME")
-	}
-	if len(failed) > 0 {
-		lines = append(lines, s.dim.Render("Quota request failed for "+strings.Join(failed, ", ")))
-	}
-	if len(token) > 0 {
-		lines = append(lines, s.dim.Render("Quota unknown for "+strings.Join(token, ", ")+": a setup-token token cannot read it; see it in claude with")+" /usage")
-	}
+	lines = append(lines, quota...)
 	if !hasDefault {
 		lines = append(lines, s.dim.Render("No default login: claude through cc-login does not start. Choose one with:")+" cc-login use NAME")
 	}

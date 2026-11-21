@@ -25,8 +25,8 @@ stderr 'login off is signed out'
 
 # rename keeps the credentials directory, so the login stays signed in.
 exec cc-login rename work home
-exec cc-login list --format '{{.Name}} {{.Status}}'
-stdout '^home signed-in$'
+exec cc-login list
+stdout '^  home .* ● signed in'
 ! exec cc-login rename home ci
 stderr 'login ci exists'
 

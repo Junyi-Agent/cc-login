@@ -1,12 +1,8 @@
 package creds
 
 import (
-	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 	"testing"
-	"time"
 )
 
 func cred(tok string, expSec int64) []byte {
@@ -20,46 +16,25 @@ func TestKeychainService(t *testing.T) {
 	}
 }
 
-func TestAccessToken(t *testing.T) {
-	now := time.Unix(1_000_000, 0)
-
-	var keychain []byte
-	old := ReadKeychain
-	ReadKeychain = func(context.Context, string) ([]byte, bool) { return keychain, keychain != nil }
-	defer func() { ReadKeychain = old }()
-
-	dir := t.TempDir()
-	file := filepath.Join(dir, ".credentials.json")
-	ctx := context.Background()
-
-	if _, r := AccessToken(ctx, dir, now); r != None {
-		t.Fatalf("nothing stored: %v", r)
+func TestNewest(t *testing.T) {
+	cases := []struct {
+		name  string
+		blobs [][]byte
+		tok   string
+		exp   int64
+	}{
+		{"nothing stored", nil, "", 0},
+		{"the file", [][]byte{cred("from-file", 1_000_600)}, "from-file", 1_000_600},
+		{"the later one wins", [][]byte{cred("from-file", 1_000_600), cred("from-keychain", 1_003_600)}, "from-keychain", 1_003_600},
+		{"no Keychain item", [][]byte{cred("from-file", 1_000_600), nil}, "from-file", 1_000_600},
+		{"an empty token", [][]byte{[]byte(`{"claudeAiOauth":{"accessToken":""}}`)}, "", 0},
+		{"not JSON", [][]byte{[]byte("nope")}, "", 0},
 	}
 
-	if err := os.WriteFile(file, cred("from-file", 1_000_600), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if tok, r := AccessToken(ctx, dir, now); r != OK || tok != "from-file" {
-		t.Fatalf("file: %q %v", tok, r)
-	}
-
-	keychain = cred("from-keychain", 1_003_600)
-	if tok, _ := AccessToken(ctx, dir, now); tok != "from-keychain" {
-		t.Fatalf("the later one should win: %q", tok)
-	}
-
-	keychain = nil
-	if err := os.WriteFile(file, cred("soon", 1_000_020), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if _, r := AccessToken(ctx, dir, now); r != Expired {
-		t.Fatalf("within 30s of expiry counts as expired: %v", r)
-	}
-
-	if err := os.WriteFile(file, []byte(`{"claudeAiOauth":{"accessToken":""}}`), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if _, r := AccessToken(ctx, dir, now); r != None {
-		t.Fatalf("empty token: %v", r)
+	for _, tc := range cases {
+		tok, exp := newest(tc.blobs...)
+		if tok != tc.tok || (tok != "" && exp.Unix() != tc.exp) {
+			t.Errorf("%s: %q expiring %d; want %q, %d", tc.name, tok, exp.Unix(), tc.tok, tc.exp)
+		}
 	}
 }

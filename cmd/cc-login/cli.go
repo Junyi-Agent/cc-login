@@ -29,7 +29,7 @@ the one new claude launches use. Without a command it lists the logins.
 		SuggestionsMinimumDistance: 2,
 		SilenceErrors:              true,
 		SilenceUsage:               true,
-		RunE:                       c.runs(func(cmd *cobra.Command, _ []string) error { return c.list(cmd.Context(), "") }),
+		RunE:                       c.runs(func(cmd *cobra.Command, _ []string) error { return c.list(cmd.Context(), false) }),
 	}
 	root.SetOut(c.out)
 	root.SetErr(c.err)
@@ -49,16 +49,11 @@ the one new claude launches use. Without a command it lists the logins.
 		Short: "List the logins; ▸ marks the default",
 		Args:  cobra.NoArgs,
 		RunE: c.runs(func(cmd *cobra.Command, _ []string) error {
-			format, _ := cmd.Flags().GetString("format")
-			if asJSON, _ := cmd.Flags().GetBool("json"); asJSON {
-				format = "json"
-			}
-			return c.list(cmd.Context(), format)
+			asJSON, _ := cmd.Flags().GetBool("json")
+			return c.list(cmd.Context(), asJSON)
 		}),
 	}
-	list.Flags().String("format", "", "for scripts: json, tsv, or a Go template such as '{{.Name}} {{.Status}}'")
-	list.Flags().Bool("json", false, "the same as --format json")
-	list.MarkFlagsMutuallyExclusive("format", "json")
+	list.Flags().Bool("json", false, "print JSON, for scripts")
 
 	use := &cobra.Command{
 		Use:               "use NAME",

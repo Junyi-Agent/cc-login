@@ -2,13 +2,14 @@ package app
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"time"
 
 	"golang.org/x/sync/errgroup"
 
+	"github.com/Junyi-Agent/cc-login/internal/anthropic"
 	"github.com/Junyi-Agent/cc-login/internal/claude"
-	"github.com/Junyi-Agent/cc-login/internal/creds"
-	"github.com/Junyi-Agent/cc-login/internal/quota"
 	"github.com/Junyi-Agent/cc-login/internal/state"
 )
 
@@ -33,21 +34,9 @@ func (s Status) String() string {
 // Usable reports whether claude can use the login: signed in, expiring or not.
 func (s Status) Usable() bool { return s == SignedIn || s == Expiring }
 
-// QuotaGap is why a usable login has no live quota.
-type QuotaGap int
-
-// The reasons.
-const (
-	GapNone    QuotaGap = iota
-	GapStale            // the sign-in's access token has expired; a claude run refreshes it
-	GapError            // the request failed
-	GapToken            // a setup-token token cannot read the quota
-	GapNoLogin          // an API key login has no plan quota
-)
-
-func (g QuotaGap) String() string {
-	return [...]string{"none", "stale", "error", "token", "api-key"}[g]
-}
+// ErrStaleToken means the sign-in's access token has expired, so the quota
+// cannot be read.
+var ErrStaleToken = errors.New("the access token expired; a claude run with the login refreshes it")
 
 // View is what `list` shows about one login.
 type View struct {
@@ -60,9 +49,8 @@ type View struct {
 	Status    Status
 	ExpiresAt time.Time // zero when unknown or never
 
-	Quota    quota.Quota
-	HasQuota bool // the API returned the quota now
-	QuotaGap QuotaGap
+	Quota    *anthropic.Quota // the live quota; nil when not read
+	QuotaErr error            // why reading the quota failed
 }
 
 // List probes every login: claude auth status and the quota, a few logins
@@ -106,7 +94,7 @@ func (a *App) probe(ctx context.Context, path, id string, l *state.Login, isDefa
 	start := time.Now()
 	defer func() {
 		a.Log.Debug("probe", "login", l.Name, "id", id, "kind", l.Kind, "status", v.Status,
-			"quota", v.HasQuota, "gap", v.QuotaGap, "took", time.Since(start).Round(time.Millisecond))
+			"quota", v.Quota != nil, "quota_err", v.QuotaErr, "took", time.Since(start).Round(time.Millisecond))
 	}()
 
 	v = View{Name: l.Name, Default: isDefault, Kind: l.Kind, Account: l.Account, Plan: l.Plan, Status: SignedOut}
@@ -146,38 +134,30 @@ func (a *App) probe(ctx context.Context, path, id string, l *state.Login, isDefa
 		v.Status = Expiring
 	}
 
-	if v.Status.Usable() {
-		a.quota(ctx, &v, dir)
+	// Only a sign-in's access token can read the quota.
+	if v.Status.Usable() && l.Kind == state.SignIn {
+		v.Quota, v.QuotaErr = a.quota(ctx, dir)
 	}
 
 	return v
 }
 
 // quota reads the live quota with the access token of the sign-in stored in
-// dir; when it cannot, QuotaGap says why.
-func (a *App) quota(ctx context.Context, v *View, dir string) {
-	if v.Kind == state.APIKey {
-		v.QuotaGap = GapNoLogin
-	} else {
-		// A token login's own token cannot read the quota; the access token
-		// of a sign-in stored under it can, while valid.
-		tok, res := a.AccessToken(ctx, dir, a.Now())
-		switch {
-		case res == creds.OK:
-			q, err := a.Usage(ctx, tok)
-			if err == nil {
-				v.Quota, v.HasQuota = q, true
-				return
-			}
-			a.Log.Debug("quota request failed", "login", v.Name, "err", err)
-			v.QuotaGap = GapError
-
-		case v.Kind == state.Token:
-			v.QuotaGap = GapToken
-
-		case res == creds.Expired:
-			v.QuotaGap = GapStale
-		}
+// dir; nil without one.
+func (a *App) quota(ctx context.Context, dir string) (*anthropic.Quota, error) {
+	tok, expires := a.AccessToken(ctx, dir)
+	if tok == "" {
+		return nil, nil
 	}
 
+	// 30 seconds to spare for the request.
+	if expires.Before(a.Now().Add(30 * time.Second)) {
+		return nil, ErrStaleToken
+	}
+
+	q, err := a.Usage(ctx, tok)
+	if err != nil {
+		return nil, fmt.Errorf("the quota request failed: %w", err)
+	}
+	return &q, nil
 }

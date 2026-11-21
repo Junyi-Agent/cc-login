@@ -72,15 +72,15 @@ func (c *cli) errf(format string, args ...any) {
 	_, _ = fmt.Fprintf(c.err, "cc-login: "+format+"\n", args...)
 }
 
-// list prints the logins: the table, or format for scripts.
-func (c *cli) list(ctx context.Context, format string) error {
+// list prints the logins: the table, or JSON for scripts.
+func (c *cli) list(ctx context.Context, asJSON bool) error {
 	views, err := c.app.List(ctx)
 	if err != nil {
 		return err
 	}
 
-	if format != "" {
-		return ui.Format(c.out, views, format)
+	if asJSON {
+		return ui.JSON(c.out, views)
 	}
 
 	opt := ui.Options{Now: c.app.Now()}

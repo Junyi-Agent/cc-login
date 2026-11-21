@@ -1,4 +1,4 @@
-# No state.json and no old layout: no logins yet.
+# No state.json: no logins yet.
 exec cc-login
 stdout 'No logins yet'
 ! stderr .
@@ -14,20 +14,12 @@ stdout '  home +- .* ○ signed out'
 stdout 'Sign in again with: cc-login renew home'
 ! stderr .
 
-# Empty fields are empty between the tabs.
-exec cc-login list --format tsv
-stdout '^home\tfalse\tsign-in\tsigned-out\t\t\t\t\t$'
-stdout '^work\ttrue\tsign-in\tsigned-in\tme@example.com\tteam\t\t\t$'
-
-exec cc-login list --format '{{.Name}}:{{.Default}}'
-stdout '^home:false\nwork:true$'
-
+# Unknown values are null in the JSON.
 exec cc-login list --json
 stdout '"name": "work"'
 stdout '"status": "signed-in"'
-
-! exec cc-login list --json --format tsv
-stderr 'none of the others can be'
+stdout '"account": null'
+stdout '"five_hour": null'
 
 -- state.json --
 {

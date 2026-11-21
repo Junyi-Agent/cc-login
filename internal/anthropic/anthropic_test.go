@@ -33,11 +33,11 @@ func TestUsage(t *testing.T) {
 	}
 
 	reset := time.Date(2026, 11, 21, 5, 0, 0, 123_456_000, time.UTC)
-	if *q.FiveHour.Used != 27 || !q.FiveHour.ResetsAt.Equal(reset) {
-		t.Errorf("five_hour = %d %v", *q.FiveHour.Used, q.FiveHour.ResetsAt)
+	if left, _ := q.FiveHour.Left(); left != 73 || !q.FiveHour.ResetsAt.Equal(reset) {
+		t.Errorf("five_hour = %d%% left, resets %v", left, q.FiveHour.ResetsAt)
 	}
-	if *q.SevenDay.Used != 76 {
-		t.Errorf("seven_day = %d", *q.SevenDay.Used)
+	if left, _ := q.SevenDay.Left(); left != 24 {
+		t.Errorf("seven_day = %d%% left", left)
 	}
 
 	if _, err := c.Usage(context.Background(), "bad"); err == nil {
@@ -52,8 +52,15 @@ func TestUsageNoLimit(t *testing.T) {
 	})
 
 	q, err := c.Usage(context.Background(), "x")
-	if err != nil || q.FiveHour.Used != nil || *q.SevenDay.Used != 3 || !q.SevenDay.ResetsAt.IsZero() {
-		t.Fatalf("q = %+v, %v", q, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, ok := q.FiveHour.Left(); ok {
+		t.Error("five_hour is null: want no percent")
+	}
+	if left, ok := q.SevenDay.Left(); !ok || left != 97 || q.SevenDay.ResetsAt != nil {
+		t.Errorf("seven_day = %d%% left, resets %v", left, q.SevenDay.ResetsAt)
 	}
 }
 
@@ -64,6 +71,25 @@ func TestUsageBadJSON(t *testing.T) {
 
 	if _, err := c.Usage(context.Background(), "x"); err == nil {
 		t.Error("a bad time: want an error")
+	}
+}
+
+func TestWindowLeft(t *testing.T) {
+	f := func(v float64) *float64 { return &v }
+	cases := []struct {
+		used *float64
+		want int
+	}{
+		{f(0), 100},
+		{f(26.5), 73},
+		{f(130), 0},
+		{f(-5), 100},
+	}
+
+	for _, tc := range cases {
+		if got, ok := (&Window{Used: tc.used}).Left(); !ok || got != tc.want {
+			t.Errorf("Left with %v used = %d, %v; want %d", *tc.used, got, ok, tc.want)
+		}
 	}
 }
 

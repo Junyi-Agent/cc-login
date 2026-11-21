@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Junyi-Agent/cc-login/internal/anthropic"
 	"github.com/Junyi-Agent/cc-login/internal/app"
-	"github.com/Junyi-Agent/cc-login/internal/quota"
 	"github.com/Junyi-Agent/cc-login/internal/state"
 )
 
@@ -19,30 +19,33 @@ var update = flag.Bool("update", false, "rewrite the golden files in testdata")
 
 var now = time.Date(2026, 11, 21, 12, 0, 0, 0, time.UTC)
 
-func pct(n int) *int { return &n }
+// usedWindow is a quota window with that percent used, resetting at reset
+// (none when nil).
+func usedWindow(used float64, reset *time.Time) *anthropic.Window {
+	return &anthropic.Window{Used: &used, ResetsAt: reset}
+}
 
 // views are one login of each kind and status.
 func views() []app.View {
 	at := func(h int) time.Time { return now.Add(time.Duration(h) * time.Hour) }
+	in := func(h int) *time.Time { t := at(h); return &t }
+
 	return []app.View{
 		{
 			Name: "work", Default: true, Kind: state.SignIn, Account: "me@example.com", Plan: "team",
-			Status: app.SignedIn, ExpiresAt: at(30 * 24), HasQuota: true,
-			Quota: quota.Quota{
-				FiveHour: quota.Window{Used: pct(30), ResetsAt: at(3)},
-				SevenDay: quota.Window{Used: pct(85), ResetsAt: at(50)},
-			},
+			Status: app.SignedIn, ExpiresAt: at(30 * 24),
+			Quota: &anthropic.Quota{FiveHour: usedWindow(30, in(3)), SevenDay: usedWindow(85, in(50))},
 		},
 		{
 			Name: "soon", Kind: state.SignIn, Account: "a-long-account-name@example.com", Plan: "max",
-			Status: app.Expiring, ExpiresAt: at(30), HasQuota: true,
-			Quota: quota.Quota{FiveHour: quota.Window{Used: pct(60)}},
+			Status: app.Expiring, ExpiresAt: at(30),
+			Quota: &anthropic.Quota{FiveHour: usedWindow(60, nil)},
 		},
 		{Name: "old", Kind: state.SignIn, Status: app.Expired, ExpiresAt: at(-5)},
 		{Name: "gone", Kind: state.SignIn, Account: "x@example.com", Status: app.SignedOut},
-		{Name: "ci", Kind: state.Token, Status: app.SignedIn, ExpiresAt: at(400 * 24), QuotaGap: app.GapToken},
-		{Name: "api", Kind: state.APIKey, Account: "API key …wxyz", Plan: "api", Status: app.SignedIn, QuotaGap: app.GapNoLogin},
-		{Name: "stale", Kind: state.SignIn, Status: app.SignedIn, QuotaGap: app.GapStale},
+		{Name: "ci", Kind: state.Token, Status: app.SignedIn, ExpiresAt: at(400 * 24)},
+		{Name: "api", Kind: state.APIKey, Account: "API key …wxyz", Plan: "api", Status: app.SignedIn},
+		{Name: "stale", Kind: state.SignIn, Status: app.SignedIn, QuotaErr: app.ErrStaleToken},
 	}
 }
 
@@ -88,7 +91,7 @@ func TestTable(t *testing.T) {
 	}
 }
 
-// A narrow terminal drops the date column, then shortens the accounts.
+// A narrow terminal drops the date column.
 func TestTableNarrow(t *testing.T) {
 	var b bytes.Buffer
 	if err := Table(&b, views(), Options{Now: now, Width: 90}); err != nil {
@@ -113,9 +116,9 @@ func TestTableEmpty(t *testing.T) {
 	}
 }
 
-func TestFormatJSON(t *testing.T) {
+func TestJSON(t *testing.T) {
 	var b bytes.Buffer
-	if err := Format(&b, views(), "json"); err != nil {
+	if err := JSON(&b, views()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -128,36 +131,14 @@ func TestFormatJSON(t *testing.T) {
 	if work.Status != "signed-in" || work.Kind != "sign-in" || !work.Default {
 		t.Errorf("work = %+v", work)
 	}
-	if work.FiveHour.LeftPercent != 70 || work.SevenDay.LeftPercent != 15 {
+	if work.FiveHour.LeftPercent != 70 || work.SevenDay.LeftPercent != 15 || !work.FiveHour.ResetsAt.Equal(now.Add(3*time.Hour)) {
 		t.Errorf("work quota = %+v %+v", work.FiveHour, work.SevenDay)
+	}
+	if soon := got[1]; soon.FiveHour.ResetsAt != nil || soon.SevenDay != nil {
+		t.Errorf("soon quota = %+v %+v; want no reset time and no weekly window", soon.FiveHour, soon.SevenDay)
 	}
 	if ci.Kind != "token" || ci.FiveHour != nil || ci.Plan != nil {
 		t.Errorf("ci = %+v", ci)
-	}
-}
-
-func TestFormatTSVAndTemplate(t *testing.T) {
-	cases := []struct {
-		format, first string
-	}{
-		{"tsv", "work\ttrue\tsign-in\tsigned-in\tme@example.com\tteam\t2026-12-21T12:00:00Z\t70\t15"},
-		{"{{.Name}} {{.Status}}", "work signed-in"},
-	}
-
-	for _, tc := range cases {
-		var b bytes.Buffer
-		if err := Format(&b, views(), tc.format); err != nil {
-			t.Fatal(err)
-		}
-
-		lines := strings.Split(strings.TrimSuffix(b.String(), "\n"), "\n")
-		if len(lines) != len(views()) || lines[0] != tc.first {
-			t.Errorf("%s: %d lines, first %q; want %d, %q", tc.format, len(lines), lines[0], len(views()), tc.first)
-		}
-	}
-
-	if err := Format(&bytes.Buffer{}, views(), "{{.Nope"); err == nil {
-		t.Error("a broken template: want an error")
 	}
 }
 
