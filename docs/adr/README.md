@@ -34,3 +34,4 @@
 | [0015](0015-simplify-more.md) | 再精简：token 不推断组织、renew 只做登录、表格一列过期时间、确认写 stderr | 采纳 |
 | [0016](0016-release-binaries.md) | 用 GitHub release 的二进制安装：固定的包名和 install.sh | 采纳 |
 | [0017](0017-own-oauth.md) | token login 由 cc-login 自己走 OAuth，多要 user:profile | 采纳 |
+| [0018](0018-list-org-and-token-quota.md) | 无命令时给帮助；list 加组织列；token login 读配额和 profile | 采纳 |

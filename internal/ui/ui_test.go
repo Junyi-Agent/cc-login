@@ -32,7 +32,7 @@ func views() []app.View {
 
 	return []app.View{
 		{
-			Name: "work", Default: true, Kind: state.SignIn, Account: "me@example.com", Plan: "team",
+			Name: "work", Default: true, Kind: state.SignIn, Account: "me@example.com", Org: "Example Org", Plan: "team",
 			Status: app.SignedIn, ExpiresAt: at(30 * 24),
 			Quota: &anthropic.Quota{FiveHour: usedWindow(30, in(3)), SevenDay: usedWindow(85, in(50))},
 		},
@@ -43,7 +43,7 @@ func views() []app.View {
 		},
 		{Name: "old", Kind: state.SignIn, Status: app.Expired, ExpiresAt: at(-5)},
 		{Name: "gone", Kind: state.SignIn, Account: "x@example.com", Status: app.SignedOut},
-		{Name: "ci", Kind: state.Token, Status: app.SignedIn, ExpiresAt: at(400 * 24)},
+		{Name: "ci", Kind: state.Token, Org: "Acme", Status: app.SignedIn, ExpiresAt: at(400 * 24)},
 		{Name: "api", Kind: state.APIKey, Account: "API key …wxyz", Plan: "api", Status: app.SignedIn},
 		{Name: "stale", Kind: state.SignIn, Status: app.SignedIn, QuotaErr: app.ErrStaleToken},
 	}

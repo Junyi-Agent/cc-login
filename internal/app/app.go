@@ -48,6 +48,7 @@ type App struct {
 	Exchange    func(ctx context.Context, f oauth.Flow, code string) (oauth.Token, error)
 	AccessToken func(ctx context.Context, dir string) (string, time.Time)
 	Usage       func(ctx context.Context, accessToken string) (anthropic.Quota, error)
+	Profile     func(ctx context.Context, accessToken string) (anthropic.Profile, error)
 
 	Parallel int           // logins probed at once
 	Timeout  time.Duration // for probing one login
@@ -69,6 +70,7 @@ func New() *App {
 		Exchange:    oauth.New().Exchange,
 		AccessToken: creds.AccessToken,
 		Usage:       api.Usage,
+		Profile:     api.Profile,
 		Parallel:    8,
 		Timeout:     15 * time.Second,
 		Log:         slog.New(slog.DiscardHandler),

@@ -1,5 +1,12 @@
-# No state.json: no logins yet.
+# No command: the help, not the list.
 exec cc-login
+stdout 'Usage:'
+stdout 'list +List the logins'
+! stdout 'No logins yet'
+! stderr .
+
+# No state.json: no logins yet.
+exec cc-login list
 stdout 'No logins yet'
 ! stderr .
 
@@ -9,8 +16,9 @@ cp state.json root/state.json
 cp status.json root/.dirs/a1/fake-status.json
 
 exec cc-login list
-stdout '▸ work +me@example.com +team .* ● signed in'
-stdout '  home +- .* ○ signed out'
+stdout 'NAME +EMAIL +ORG +PLAN'
+stdout '▸ work +me@example.com +Example Org +team .* ● signed in'
+stdout '  home +- +- +- .* ○ signed out'
 stdout 'Sign in again with: cc-login renew home'
 ! stderr .
 
@@ -19,6 +27,7 @@ exec cc-login list --json
 stdout '"name": "work"'
 stdout '"status": "signed-in"'
 stdout '"account": null'
+stdout '"org": "Example Org"'
 stdout '"five_hour": null'
 
 -- state.json --
@@ -26,7 +35,7 @@ stdout '"five_hour": null'
   "version": 1,
   "default": "a1",
   "logins": {
-    "a1": {"name": "work", "kind": "sign-in", "account": "me@example.com", "plan": "team", "created_at": "2026-11-01T00:00:00Z"},
+    "a1": {"name": "work", "kind": "sign-in", "account": "me@example.com", "org": "Example Org", "plan": "team", "created_at": "2026-11-01T00:00:00Z"},
     "b2": {"name": "home", "kind": "sign-in", "created_at": "2026-11-01T00:00:00Z"}
   }
 }

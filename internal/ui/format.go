@@ -23,6 +23,7 @@ type loginJSON struct {
 	Kind      string      `json:"kind"`   // sign-in, token, api-key
 	Status    string      `json:"status"` // signed-in, expiring, expired, signed-out
 	Account   *string     `json:"account"`
+	Org       *string     `json:"org"`
 	Plan      *string     `json:"plan"`
 	ExpiresAt *time.Time  `json:"expires_at"`
 	FiveHour  *windowJSON `json:"five_hour"`
@@ -44,7 +45,7 @@ func JSON(w io.Writer, views []app.View) error {
 func login(v app.View) loginJSON {
 	l := loginJSON{
 		Name: v.Name, Default: v.Default, Kind: string(v.Kind), Status: v.Status.String(),
-		Account: strPtr(v.Account), Plan: strPtr(v.Plan), ExpiresAt: timePtr(v.ExpiresAt),
+		Account: strPtr(v.Account), Org: strPtr(v.Org), Plan: strPtr(v.Plan), ExpiresAt: timePtr(v.ExpiresAt),
 	}
 
 	if v.Quota != nil {

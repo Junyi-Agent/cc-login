@@ -11,7 +11,7 @@ The short version is in [[README]]. `cc-login --help` and
 
 | Command | What it does |
 |---|---|
-| `list` | the logins, their status, quota and expiry; `--json` for scripts. `cc-login` without a command does the same |
+| `list` | the logins, their email, organization, plan, quota, status and expiry; `--json` for scripts. `cc-login` without a command shows the help |
 | `run [NAME] [-- ARGS]` | becomes claude (exec) with one login's credentials; without NAME the login of the surrounding claude, else the default |
 | `use NAME` | makes a signed-in login the default |
 | `rename OLD NEW` | renames; the login stays signed in |
@@ -30,6 +30,11 @@ shows its email and claude's `/status` shows the account and organization.
 cc-login keeps no refresh token. A token login saved by an older cc-login
 (from `claude setup-token`) has no account for claude; `cc-login renew NAME`
 replaces its token.
+
+A token login with `user:profile` also has its organization and plan: `add` and
+`renew` read them from `/api/oauth/profile` ([ADR 0018](adr/0018-list-org-and-token-quota.md)),
+and `list` reads its quota with the token. If the profile cannot be read the
+login is saved without them; `renew` tries again.
 
 `list` runs `claude auth status` and the quota request for up to 8 logins at
 once; Ctrl-C stops it. The table shows how long until a login expires; `list
@@ -100,6 +105,7 @@ even after `cc-login use` picks another default.
     "kind": "sign-in",
     "status": "signed-in",
     "account": "me@example.com",
+    "org": "Example Org",
     "plan": "team",
     "expires_at": "2026-12-21T12:00:00Z",
     "five_hour": {"left_percent": 70, "resets_at": "2026-11-21T15:00:00Z"},
@@ -110,8 +116,9 @@ even after `cc-login use` picks another default.
 
 `kind` is `sign-in`, `token` or `api-key`; `status` is `signed-in`,
 `expiring` (within a week), `expired` or `signed-out`. The quota is the live
-one, read for sign-in logins only: `null` when there is none (a token or API
-key login, an expired access token, a failed request); other unknown values
+one, read for sign-in logins and for token logins with `user:profile`: `null`
+when there is none (an API key login, an older token login, an expired access
+token, a failed request); other unknown values
 are `null` too.
 
 ## Data layout

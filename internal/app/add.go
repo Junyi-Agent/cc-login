@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -180,7 +181,34 @@ func (a *App) saveToken(ctx context.Context, dir string, l *state.Login, p Promp
 	if tok.Account.Email != "" {
 		l.Account = tok.Account.Email
 	}
+
+	if slices.Contains(l.Scopes, oauthProfileScope) {
+		a.saveProfile(ctx, l, tok.AccessToken, p)
+	}
 	return nil
+}
+
+// oauthProfileScope is the scope that lets a token read its profile and quota.
+const oauthProfileScope = "user:profile"
+
+// saveProfile records in l the organization and the plan that the profile of
+// the token says. The login is saved anyway when that fails: it says so, and
+// the next add or renew tries again.
+func (a *App) saveProfile(ctx context.Context, l *state.Login, token string, p Prompter) {
+	pr, err := a.Profile(ctx, token)
+	a.Log.Debug("oauth profile", "login", l.Name, "ok", err == nil)
+	if err != nil {
+		p.Note(fmt.Sprintf("Could not read the organization and plan of %s (%s); renew it to try again.", l.Name, err))
+		return
+	}
+
+	l.Org = pr.Org
+	if plan := pr.Plan(); plan != "" {
+		l.Plan = plan
+	}
+	if pr.Email != "" {
+		l.Account = pr.Email
+	}
 }
 
 // validPrefix checks a pasted key or token: the prefix, and no spaces.

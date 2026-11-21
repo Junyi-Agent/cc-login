@@ -20,6 +20,7 @@ func TestList(t *testing.T) {
 		"c3": {Name: "gone", Kind: state.SignIn},
 		"d4": {Name: "old", Kind: state.SignIn},
 		"e5": {Name: "ci", Kind: state.Token, TokenExpiresAt: inDays(300)},
+		"i9": {Name: "scoped", Kind: state.Token, Org: "Example Org", Scopes: []string{"user:inference", "user:profile"}},
 		"f6": {Name: "api", Kind: state.APIKey, KeyHint: "wxyz"},
 		"g7": {Name: "stale", Kind: state.SignIn},
 		"h8": {Name: "flaky", Kind: state.SignIn},
@@ -30,6 +31,7 @@ func TestList(t *testing.T) {
 			"b2": {SignedIn: true, ExpiresAt: *inDays(2)},
 			"d4": {ExpiresAt: *inDays(-1)},
 			"e5": {SignedIn: true},
+			"i9": {SignedIn: true},
 			"f6": {SignedIn: true},
 			"g7": {SignedIn: true},
 			"h8": {SignedIn: true},
@@ -42,6 +44,8 @@ func TestList(t *testing.T) {
 			"access-a1": {FiveHour: used(30)},
 			"access-b2": {SevenDay: used(90)},
 			"access-e5": {FiveHour: used(10)},
+			// the quota of a scoped token login is read with the token file
+			"secret-of-i9": {SevenDay: used(40)},
 		},
 	}
 	a := newApp(t, logins, "a1", f)
@@ -73,6 +77,7 @@ func TestList(t *testing.T) {
 		{"gone", SignedOut, false, ""},
 		{"old", Expired, false, ""},
 		{"ci", SignedIn, false, ""},
+		{"scoped", SignedIn, true, ""},
 		{"api", SignedIn, false, ""},
 		{"stale", SignedIn, false, "stale"},
 		{"flaky", SignedIn, false, "failed"},
@@ -99,6 +104,9 @@ func TestList(t *testing.T) {
 	}
 	if got := byName["ci"].ExpiresAt; !got.Equal(*inDays(300)) {
 		t.Errorf("ci expires %v; want the expiry state.json keeps", got)
+	}
+	if got := byName["scoped"]; got.Org != "Example Org" || got.Quota == nil || got.Quota.SevenDay == nil {
+		t.Errorf("scoped: org %q, quota %+v", got.Org, got.Quota)
 	}
 	if got := byName["api"]; got.Account != "API key …wxyz" || got.Plan != "api" {
 		t.Errorf("api: account %q, plan %q", got.Account, got.Plan)

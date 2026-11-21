@@ -8,6 +8,7 @@ import (
 	"math"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -75,6 +76,56 @@ func (c *Client) Usage(ctx context.Context, accessToken string) (Quota, error) {
 	var q Quota
 	err = json.NewDecoder(resp.Body).Decode(&q)
 	return q, err
+}
+
+// Profile is what api/oauth/profile says about the account of a token.
+type Profile struct {
+	Email   string // "" when unknown
+	Org     string // the organization's name; "" when unknown
+	OrgType string // organization_type: claude_pro, claude_max, claude_team...
+}
+
+// Plan is the plan the organization type names: claude_team is team,
+// claude_max is max; "" when unknown.
+func (p Profile) Plan() string { return strings.TrimPrefix(p.OrgType, "claude_") }
+
+// Profile reads the account and the organization of the OAuth token that
+// has the user:profile scope (api/oauth/profile, not documented).
+func (c *Client) Profile(ctx context.Context, accessToken string) (Profile, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+"/api/oauth/profile", nil)
+	if err != nil {
+		return Profile{}, err
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	req.Header.Set("anthropic-beta", "oauth-2025-04-20")
+
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return Profile{}, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode >= 400 {
+		return Profile{}, fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+
+	var body struct {
+		Account struct {
+			Email string `json:"email"`
+		} `json:"account"`
+		Organization struct {
+			Name string `json:"name"`
+			Type string `json:"organization_type"`
+		} `json:"organization"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		return Profile{}, err
+	}
+
+	return Profile{Email: body.Account.Email, Org: body.Organization.Name, OrgType: body.Organization.Type}, nil
 }
 
 // Verdict is what the API said about a key.

@@ -33,7 +33,7 @@ Then, every day:
 
 ```sh
 claude                 # Claude Code with the default login
-cc-login               # list the logins, their quota and expiry
+cc-login list          # the logins, their quota and expiry
 cc-login use personal  # switch the default
 ```
 

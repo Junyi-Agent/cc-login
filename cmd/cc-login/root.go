@@ -20,14 +20,15 @@ func (c *cli) rootCmd() *cobra.Command {
 		Use:   "cc-login",
 		Short: "Several Claude Code logins on one machine",
 		Long: `cc-login keeps several Claude Code logins on one machine, and the default login,
-the one new claude launches use. Without a command it lists the logins.
+the one new claude launches use. Without a command it shows this help; list
+shows the logins.
 `,
 		Args: c.noCommand,
 		// cobra sets this default only on its own unknown-command path.
 		SuggestionsMinimumDistance: 2,
 		SilenceErrors:              true,
 		SilenceUsage:               true,
-		RunE:                       func(cmd *cobra.Command, _ []string) error { return c.list(cmd.Context(), false) },
+		RunE:                       func(cmd *cobra.Command, _ []string) error { return cmd.Help() },
 	}
 	root.SetOut(c.out)
 	root.SetErr(c.err)

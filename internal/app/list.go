@@ -3,11 +3,13 @@ package app
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"golang.org/x/sync/errgroup"
 
 	"github.com/Junyi-Agent/cc-login/internal/anthropic"
+	"github.com/Junyi-Agent/cc-login/internal/creds"
 	"github.com/Junyi-Agent/cc-login/internal/state"
 )
 
@@ -17,6 +19,7 @@ type View struct {
 	Default bool
 	Kind    state.Kind
 	Account string // "" when unknown
+	Org     string // "" when unknown
 	Plan    string // "" when unknown
 
 	Status    Status
@@ -71,7 +74,7 @@ func (a *App) probe(ctx context.Context, id string, l *state.Login, isDefault bo
 			"quota", v.Quota != nil, "quota_err", v.QuotaErr, "took", time.Since(start).Round(time.Millisecond))
 	}()
 
-	v = View{Name: l.Name, Default: isDefault, Kind: l.Kind, Account: l.Account, Plan: l.Plan, Status: SignedOut}
+	v = View{Name: l.Name, Default: isDefault, Kind: l.Kind, Account: l.Account, Org: l.Org, Plan: l.Plan, Status: SignedOut}
 	if l.Kind == state.APIKey {
 		v.Account = "API key"
 		if l.KeyHint != "" {
@@ -107,12 +110,32 @@ func (a *App) probe(ctx context.Context, id string, l *state.Login, isDefault bo
 		v.Status = Expiring
 	}
 
-	// Only a sign-in's access token can read the quota.
-	if v.Status.Usable() && l.Kind == state.SignIn {
-		v.Quota, v.QuotaErr = a.quota(ctx, a.Store.Dir(id))
+	// The quota comes from a sign-in's access token, or from the token of a
+	// token login that has user:profile; an API key has none.
+	if v.Status.Usable() {
+		switch {
+		case l.Kind == state.SignIn:
+			v.Quota, v.QuotaErr = a.quota(ctx, a.Store.Dir(id))
+		case l.Kind == state.Token && slices.Contains(l.Scopes, oauthProfileScope):
+			v.Quota, v.QuotaErr = a.tokenQuota(ctx, a.Store.Dir(id))
+		}
 	}
 
 	return v
+}
+
+// tokenQuota reads the live quota with the token in the token file of dir.
+func (a *App) tokenQuota(ctx context.Context, dir string) (*anthropic.Quota, error) {
+	tok, err := creds.Secret(dir, state.Token)
+	if err != nil {
+		return nil, fmt.Errorf("the token file: %w", err)
+	}
+
+	q, err := a.Usage(ctx, tok)
+	if err != nil {
+		return nil, fmt.Errorf("the quota request failed: %w", err)
+	}
+	return &q, nil
 }
 
 // quota reads the live quota with the access token of the sign-in stored in
