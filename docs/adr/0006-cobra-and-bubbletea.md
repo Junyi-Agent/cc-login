@@ -8,8 +8,9 @@
 
 ## 决策
 
-- 命令行解析用 `spf13/cobra`：每个命令一个 `cobra.Command`，`--` 之后的参数用 `ArgsLenAtDash` 取出透传给 claude。
-- 报错和 help 文案保持与 zsh 版一致（CLAUDE.md 的移植规则）：`SilenceErrors` / `SilenceUsage`，自定义 `SetHelpFunc`、`SetFlagErrorFunc` 和参数校验，输出 `cc-login: unknown command x; the commands: ...` 这类原文，退出码一致。
+- 命令行用 `spf13/cobra`：每个命令一个 `cobra.Command`，cobra 负责分发命令和生成补全。
+- 参数检查照 zsh 版 `cc-login()` 自己写（`cmd/cc-login/parse.go`），所有命令设 `DisableFlagParsing`：cobra 的 flag 解析允许选项出现在任意位置（`add --api-key NAME`），而 zsh 版要求选项紧跟在 NAME 后面、claude 的选项在 `--` 之后，报错文案也不同。`SilenceErrors` / `SilenceUsage`，自定义 help 命令和 `SetHelpFunc`，输出 `cc-login: unknown command x; the commands: ...` 这类原文，退出码一致，由 `cmd/cc-login/main_test.go` 锁住。
+- 与 zsh 版的文案差异只有：usage 和命令列表加上 Go 独有的 `list --json`、`completion`；`run` / `renew` 的 "options for claude go after --" 报错不再建议它们不接受的 `--sign-in`。
 - zsh 补全由 cobra 生成（`cc-login completion zsh`），login 名字由 `ValidArgsFunction` 列出，替代 zsh 版手写的 `_cc_login_complete`；zsh shim（0004）负责加载。
 - 交互界面用 `charmbracelet/bubbletea` + `bubbles` + `lipgloss`，入口是单独的 `cc-login tui`：显示和 `list` 相同的信息，可选中一个 login 执行 use / run / renew / remove。
 - `cc-login` 不带参数仍等于 `list`，纯文本输出与 zsh 版一致；TUI 只在显式调用、且 stdin 和 stdout 都是终端时启动，否则报错退出 1。
@@ -19,7 +20,7 @@
 ## 后果
 
 - 依赖变多，二进制变大几 MB；启动时间仍在毫秒级。
-- cobra 默认的报错格式不能直接用，要写模板和校验对齐 zsh 版，并用测试锁住。
+- cobra 的 flag 解析和默认报错都不用，只用它的命令分发和补全；参数检查是手写的，用测试锁住。
 - TUI 没有 zsh 版可比对，靠 bubbletea 的模型单元测试（发送按键消息、检查状态和视图）。
 
 ## 验证
