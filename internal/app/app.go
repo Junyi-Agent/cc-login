@@ -24,6 +24,7 @@ type App struct {
 
 	FindClaude  func() (string, error)
 	AuthStatus  func(ctx context.Context, path string, env []string) (claude.Status, error)
+	Logout      func(ctx context.Context, path string, env []string) error
 	AccessToken func(ctx context.Context, dir string, now time.Time) (string, creds.Result)
 	Usage       func(ctx context.Context, accessToken string) (quota.Quota, error)
 	QuotaCache  string
@@ -41,6 +42,7 @@ func New() *App {
 		Now:         time.Now,
 		FindClaude:  claude.Find,
 		AuthStatus:  claude.AuthStatus,
+		Logout:      claude.Logout,
 		AccessToken: creds.AccessToken,
 		Usage:       api.Usage,
 		QuotaCache:  quota.CachePath(),

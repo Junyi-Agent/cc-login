@@ -18,9 +18,13 @@ done, the zsh version keeps working on the old layout. Decisions are in
 | Command | Status |
 |---|---|
 | `list` | the logins, their status, quota and expiry; `--format json\|tsv\|TEMPLATE` (`--json` = `--format json`) for scripts |
+| `run [NAME] [-- ARGS]` | becomes claude (exec) with one login's credentials; without NAME the login of the surrounding claude, else the default |
+| `use NAME` | makes a signed-in login the default |
+| `rename OLD NEW` | renames; the login stays signed in |
+| `remove NAME` | `claude auth logout`, then deletes the login; asks first (`--yes` without a terminal) |
 | `migrate` | converts the zsh version's data layout into `state.json` |
 | `completion` | zsh, bash, fish and powershell completion: commands, options, login names |
-| `use` `add` `run` `renew` `rename` `remove` | not yet: they check their arguments, then say to use the zsh version |
+| `add` `renew` | not yet: they check their arguments, then say to use the zsh version |
 
 `list` runs `claude auth status` and the quota request for up to 8 logins at
 once; Ctrl-C stops it.
@@ -31,8 +35,32 @@ once; Ctrl-C stops it.
 `current` and `.pending`. The credentials directories stay where they are, so
 every login stays signed in; the old links and records move into
 `.legacy-<time>/` in the data directory. After that the zsh `cc-login` cannot
-read the logins: stop loading `cc-login.zsh` in your shell. Until `use`, `add`
-and `run` exist here, keep the zsh version and do not migrate yet.
+read the logins: stop loading `cc-login.zsh` in your shell. Until `add` and
+`renew` exist here, keep the zsh version and do not migrate yet.
+
+## Starting claude
+
+cc-login starts claude itself, so a login's key or token is only in that
+claude's environment, never in your shell
+([ADR 0007](docs/adr/0007-launch-claude-by-exec.md)). Either:
+
+- a link named `claude` to cc-login, in a directory early in `PATH`. Any
+  program that runs `claude` then gets the default login:
+
+  ```sh
+  mkdir -p ~/.local/lib/cc-login
+  ln -sf "$(command -v cc-login)" ~/.local/lib/cc-login/claude
+  export PATH="$HOME/.local/lib/cc-login:$PATH"   # in ~/.zshrc, before other PATH changes
+  ```
+
+  (Claude Code's own installer uses `~/.local/bin/claude`; keep the link
+  elsewhere.) cc-login finds the real claude further down `PATH`, skipping
+  itself; `CC_LOGIN_CLAUDE` names it instead.
+- or an alias: `alias claude='cc-login run --'`.
+
+A claude started by cc-login marks its environment with `CC_LOGIN_ID`, so a
+claude it starts in turn (`claude -p`, hooks, scripts) stays on the same login
+even after `cc-login use` picks another default.
 
 ## Data layout
 
@@ -134,7 +162,7 @@ ADRs) are in [CLAUDE.md](CLAUDE.md); decisions in [docs/adr](docs/adr/README.md)
 3. ~~the new structure: `state.json` and `cc-login migrate`, `internal/app`,
    typed status, lipgloss table, testscript, `list --format`~~ ([ADR 0008](docs/adr/0008-state-json-layout.md),
    [ADR 0009](docs/adr/0009-code-structure.md))
-4. `use`, `rename`, `remove`, `run`, and the `claude` link
+4. ~~`use`, `rename`, `remove`, `run`, and the `claude` link~~
    ([ADR 0007](docs/adr/0007-launch-claude-by-exec.md))
 5. `add`, `renew`, `adopt`
 6. `statusline`, `quota-refresh`, `version`, debug log

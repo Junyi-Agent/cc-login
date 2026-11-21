@@ -20,8 +20,8 @@ func (c *cli) command() *cobra.Command {
 		Long: `cc-login keeps several Claude Code logins on one machine, and the default login,
 the one new claude launches use. Without a command it lists the logins.
 
-This version runs list and migrate; the other commands still run in
-cc-login.zsh, on the old data layout.`,
+add and renew are not ported yet: they still run in cc-login.zsh, on the old
+data layout.`,
 		Args: c.noCommand,
 		// cobra sets this default only on its own unknown-command path.
 		SuggestionsMinimumDistance: 2,
@@ -51,9 +51,10 @@ cc-login.zsh, on the old data layout.`,
 	use := &cobra.Command{
 		Use:               "use NAME",
 		Short:             "Make login NAME the default",
+		Long:              "Make login NAME the default: the login of claude through cc-login. Running claudes keep theirs.",
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: c.completeName,
-		RunE:              c.runs(c.notPorted),
+		RunE:              c.runs(func(cmd *cobra.Command, args []string) error { return c.use(cmd.Context(), args[0]) }),
 	}
 
 	add := &cobra.Command{
@@ -75,11 +76,23 @@ A new login becomes the default when the machine has none.`,
 	add.MarkFlagsMutuallyExclusive("sign-in", "api-key", "oauth-token")
 
 	run := &cobra.Command{
-		Use:               "run NAME [-- ARGS...]",
-		Short:             "Launch claude once with login NAME, without changing the default",
-		Args:              c.nameThenOpts,
+		Use:   "run [NAME] [-- ARGS...]",
+		Short: "Start claude with login NAME, or with the default login",
+		Long: `Start claude with login NAME: cc-login replaces itself with claude, whose
+environment holds that login's credentials and no other's. ARGS go to claude.
+
+Without NAME: the login of the claude this runs in (a claude started by
+cc-login marks its children with CC_LOGIN_ID), else the default login. A link
+named claude to cc-login, early in PATH, does the same as cc-login run --.`,
+		Example: `  cc-login run work
+  cc-login run -- --continue
+  cc-login run ci -- -p "summarize the diff"`,
+		Args:              c.optionalNameThenOpts,
 		ValidArgsFunction: c.completeName,
-		RunE:              c.runs(c.notPorted),
+		RunE: c.runs(func(cmd *cobra.Command, args []string) error {
+			name, rest := splitDash(cmd, args)
+			return c.launch(name, rest)
+		}),
 	}
 
 	renew := &cobra.Command{
@@ -96,18 +109,25 @@ login, save a new token from claude setup-token.`,
 	rename := &cobra.Command{
 		Use:               "rename OLD NEW",
 		Short:             "Rename login OLD to NEW",
+		Long:              "Rename login OLD to NEW. It stays signed in, and running claudes keep working.",
 		Args:              cobra.ExactArgs(2),
 		ValidArgsFunction: c.completeName,
-		RunE:              c.runs(c.notPorted),
+		RunE:              c.runs(func(_ *cobra.Command, args []string) error { return c.rename(args[0], args[1]) }),
 	}
 
 	remove := &cobra.Command{
-		Use:               "remove NAME",
-		Short:             "Sign login NAME out (claude auth logout) and delete it",
+		Use:   "remove NAME",
+		Short: "Sign login NAME out (claude auth logout) and delete it",
+		Long: `Sign login NAME out with claude auth logout, which revokes its sign-in, and
+delete it with its credentials. It asks first; without a terminal, pass --yes.`,
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: c.completeName,
-		RunE:              c.runs(c.notPorted),
+		RunE: c.runs(func(cmd *cobra.Command, args []string) error {
+			yes, _ := cmd.Flags().GetBool("yes")
+			return c.remove(cmd.Context(), args[0], yes)
+		}),
 	}
+	remove.Flags().BoolP("yes", "y", false, "do not ask")
 
 	migrate := &cobra.Command{
 		Use:   "migrate",
@@ -173,6 +193,35 @@ func (c *cli) nameThenOpts(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+// optionalNameThenOpts checks run: at most a NAME, then optionally -- and
+// options for claude.
+func (c *cli) optionalNameThenOpts(cmd *cobra.Command, args []string) error {
+	dash := cmd.ArgsLenAtDash()
+	if dash == -1 {
+		dash = len(args)
+	}
+
+	if dash > 1 {
+		return fmt.Errorf("%s takes at most one NAME before --, not %d arguments", cmd.Name(), dash)
+	}
+	return nil
+}
+
+// splitDash splits the arguments of run into the NAME ("" for none) and
+// the arguments for claude after --.
+func splitDash(cmd *cobra.Command, args []string) (string, []string) {
+	dash := cmd.ArgsLenAtDash()
+	if dash == -1 {
+		dash = len(args)
+	}
+
+	name := ""
+	if dash == 1 {
+		name = args[0]
+	}
+	return name, args[dash:]
 }
 
 func (c *cli) notPorted(cmd *cobra.Command, _ []string) error {

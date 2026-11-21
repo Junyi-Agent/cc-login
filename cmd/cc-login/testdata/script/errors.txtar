@@ -16,8 +16,8 @@ stderr 'Run ''cc-login use --help'' for usage.'
 ! stderr 'sk-ant'
 
 # A command not ported yet says so and changes nothing.
-! exec cc-login use work
-stderr 'use is not ported to Go yet'
+! exec cc-login add work --api-key
+stderr 'add is not ported to Go yet'
 ! exists root/state.json
 
 exec cc-login --help

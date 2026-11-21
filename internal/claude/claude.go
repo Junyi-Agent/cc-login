@@ -25,6 +25,7 @@ var credVars = []string{
 	"CLAUDE_SECURESTORAGE_CONFIG_DIR",
 	"ANTHROPIC_API_KEY", "CC_LOGIN_API_KEY_DIR",
 	"CLAUDE_CODE_OAUTH_TOKEN", "CC_LOGIN_OAUTH_TOKEN_DIR",
+	"CC_LOGIN_ID", "CC_LOGIN_DEPTH",
 }
 
 // Env is base with the credentials of one login: its directory, and for an
@@ -52,6 +53,13 @@ func Env(base []string, dir string, kind state.Kind) ([]string, error) {
 	}
 
 	return env, nil
+}
+
+// StoredEnv is base with only the directory of a login: claude sees the
+// sign-in stored there, not the login's key or token. remove logs that
+// sign-in out.
+func StoredEnv(base []string, dir string) []string {
+	return append(without(base, credVars), "CLAUDE_SECURESTORAGE_CONFIG_DIR="+dir)
 }
 
 // without is env without the variables in names.
@@ -145,4 +153,16 @@ func AuthStatus(ctx context.Context, path string, env []string) (Status, error) 
 	}
 
 	return st, nil
+}
+
+// Logout runs `claude auth logout` with env: it revokes the stored sign-in
+// at Anthropic and deletes it. The error carries what claude printed.
+func Logout(ctx context.Context, path string, env []string) error {
+	cmd := exec.CommandContext(ctx, path, "auth", "logout")
+	cmd.Env = env
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("%w: %s", err, bytes.TrimSpace(out))
+	}
+	return nil
 }

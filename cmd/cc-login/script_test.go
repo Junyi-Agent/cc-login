@@ -60,6 +60,12 @@ func fakeClaude() {
 		os.Exit(1)
 	}
 
+	if args == "auth logout" {
+		_ = os.Remove(filepath.Join(dir, "fake-status.json")) //nolint:gosec // G703: a test fake
+		fmt.Println("Successfully logged out")
+		return
+	}
+
 	fmt.Printf("claude %s; dir %s; key %t; token %t\n", args, filepath.Base(dir),
 		os.Getenv("ANTHROPIC_API_KEY") != "", os.Getenv("CLAUDE_CODE_OAUTH_TOKEN") != "")
 }

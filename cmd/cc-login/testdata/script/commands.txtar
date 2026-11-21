@@ -1,0 +1,60 @@
+# work (sign-in, signed in, the default), ci (a token login), off (signed out).
+mkdir root/.dirs/a1 root/.dirs/t1 root/.dirs/o1
+cp state.json root/state.json
+cp status.json root/.dirs/a1/fake-status.json
+cp token root/.dirs/t1/oauth-token
+
+# run: cc-login becomes claude, with the login's credentials only.
+exec cc-login run -- --continue
+stdout '^claude --continue; dir a1; key false; token false$'
+
+exec cc-login run ci -- -p hi
+stdout '^claude -p hi; dir t1; key false; token true$'
+
+! exec cc-login run a b
+stderr 'at most one NAME before --'
+
+# use: a signed-in login becomes the default; a signed-out one cannot.
+exec cc-login use ci
+stdout 'Default login: ci'
+exec cc-login run
+stdout 'dir t1'
+
+! exec cc-login use off
+stderr 'login off is signed out'
+
+# rename keeps the credentials directory, so the login stays signed in.
+exec cc-login rename work home
+exec cc-login list --format '{{.Name}} {{.Status}}'
+stdout '^home signed-in$'
+! exec cc-login rename home ci
+stderr 'login ci exists'
+
+# remove asks; without a terminal it needs --yes, and changes nothing.
+! exec cc-login remove home
+stderr 'needs a terminal to ask; to answer yes without one, pass --yes'
+exists root/.dirs/a1
+
+exec cc-login remove --yes home
+stdout 'Removed home.'
+! exists root/.dirs/a1
+
+exec cc-login remove -y ci
+stdout 'no default login now'
+! exec cc-login run
+stderr 'no default login'
+
+-- state.json --
+{
+  "version": 1,
+  "default": "a1",
+  "logins": {
+    "a1": {"name": "work", "kind": "sign-in", "created_at": "2026-11-01T00:00:00Z"},
+    "t1": {"name": "ci", "kind": "token", "created_at": "2026-11-01T00:00:00Z"},
+    "o1": {"name": "off", "kind": "sign-in", "created_at": "2026-11-01T00:00:00Z"}
+  }
+}
+-- status.json --
+{"loggedIn": true}
+-- token --
+sk-ant-oat01-fake
