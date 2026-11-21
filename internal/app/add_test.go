@@ -19,7 +19,7 @@ func TestAddNew(t *testing.T) {
 
 	t.Run("a token, the first login: the default", func(t *testing.T) {
 		f := &fake{status: map[string]claude.AuthInfo{}}
-		a := addApp(t, map[string]*state.Login{"x1": {Name: "team", Kind: state.SignIn, OrgID: "o1", OrgName: "Example", Account: "me@example.com", Plan: "team"}}, "", f)
+		a := addApp(t, map[string]*state.Login{}, "", f)
 		p := &prompts{secrets: []string{goodToken}, lines: []string{"me@example.com"}}
 
 		res, err := a.Add(ctx, "ci", state.Token, nil, p)
@@ -35,8 +35,8 @@ func TestAddNew(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if l.Kind != state.Token || l.OrgID != "o1" || l.OrgName != "Example" || l.Plan != "team" || l.Account != "me@example.com" {
-			t.Errorf("login = %+v; want the org name and plan of the other login in o1", l)
+		if l.Kind != state.Token || l.Account != "me@example.com" || l.TokenExpiresAt == nil {
+			t.Errorf("login = %+v", l)
 		}
 
 		fi, err := os.Stat(filepath.Join(a.Store.Dir(id), creds.TokenFile))
@@ -76,7 +76,7 @@ func TestAddNew(t *testing.T) {
 		if res.Account != "new@example.com" {
 			t.Errorf("account %q", res.Account)
 		}
-		if _, l, _ := load(t, a).ByName("home"); l.Plan != "max" || l.OrgID != "o2" {
+		if _, l, _ := load(t, a).ByName("home"); l.Plan != "max" {
 			t.Errorf("login = %+v", l)
 		}
 	})

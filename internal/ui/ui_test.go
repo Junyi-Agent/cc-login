@@ -78,7 +78,7 @@ func TestMain(m *testing.M) {
 // The table to a file has no colors and no trailing spaces.
 func TestTable(t *testing.T) {
 	var b bytes.Buffer
-	if err := Table(&b, views(), Options{Now: now}); err != nil {
+	if err := Table(&b, views(), now); err != nil {
 		t.Fatal(err)
 	}
 
@@ -91,23 +91,9 @@ func TestTable(t *testing.T) {
 	}
 }
 
-// A narrow terminal drops the date column.
-func TestTableNarrow(t *testing.T) {
-	var b bytes.Buffer
-	if err := Table(&b, views(), Options{Now: now, Width: 90}); err != nil {
-		t.Fatal(err)
-	}
-
-	golden(t, "table-narrow.golden", b.String())
-
-	if strings.Contains(b.String(), "12-21 12:00") {
-		t.Error("the date column is still there")
-	}
-}
-
 func TestTableEmpty(t *testing.T) {
 	var b bytes.Buffer
-	if err := Table(&b, nil, Options{Now: now}); err != nil {
+	if err := Table(&b, nil, now); err != nil {
 		t.Fatal(err)
 	}
 

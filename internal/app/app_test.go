@@ -199,17 +199,17 @@ func addApp(t *testing.T, logins map[string]*state.Login, def string, f *fake) *
 		}
 		return anthropic.Rejected, 401
 	}
-	a.CheckToken = func(_ context.Context, tok string) (anthropic.Verdict, string, int) {
+	a.CheckToken = func(_ context.Context, tok string) (anthropic.Verdict, int) {
 		if tok == goodToken {
-			return anthropic.Accepted, "o1", 200
+			return anthropic.Accepted, 200
 		}
-		return anthropic.Rejected, "", 401
+		return anthropic.Rejected, 401
 	}
 	f.login = func(env, _ []string) error {
 		id := filepath.Base(lookup(env, "CLAUDE_SECURESTORAGE_CONFIG_DIR"))
 		f.mu.Lock()
 		defer f.mu.Unlock()
-		f.status[id] = claude.AuthInfo{SignedIn: true, Email: "new@example.com", Plan: "max", OrgID: "o2", ExpiresAt: now.Add(30 * 24 * time.Hour)}
+		f.status[id] = claude.AuthInfo{SignedIn: true, Email: "new@example.com", Plan: "max", ExpiresAt: now.Add(30 * 24 * time.Hour)}
 		return nil
 	}
 

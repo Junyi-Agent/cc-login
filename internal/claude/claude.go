@@ -136,16 +136,12 @@ type AuthInfo struct {
 	SignedIn  bool
 	ExpiresAt time.Time // zero when claude does not say
 	Email     string
-	OrgID     string
-	OrgName   string
 	Plan      string // subscriptionType
 }
 
 type statusJSON struct {
 	LoginExpiresAt   string `json:"loginExpiresAt"`
 	Email            string `json:"email"`
-	OrgID            string `json:"orgId"`
-	OrgName          string `json:"orgName"`
 	SubscriptionType string `json:"subscriptionType"`
 }
 
@@ -168,7 +164,7 @@ func AuthStatus(ctx context.Context, path string, env []string) (AuthInfo, error
 
 	var j statusJSON
 	if json.Unmarshal(out.Bytes(), &j) == nil {
-		st.Email, st.OrgID, st.OrgName, st.Plan = j.Email, j.OrgID, j.OrgName, j.SubscriptionType
+		st.Email, st.Plan = j.Email, j.SubscriptionType
 		if t, err := time.Parse(time.RFC3339Nano, j.LoginExpiresAt); err == nil {
 			st.ExpiresAt = t
 		}

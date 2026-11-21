@@ -23,7 +23,12 @@ The short version is in [[README]]. `cc-login --help` and
 | `adopt NAME` | moves `~/.claude/.credentials.json`, written by a claude run without cc-login, into a new login (`list` says when there is one) |
 
 `list` runs `claude auth status` and the quota request for up to 8 logins at
-once; Ctrl-C stops it.
+once; Ctrl-C stops it. The table shows how long until a login expires; `list
+--json` has the time.
+
+stdout carries only results: the `list` table or JSON, and `version`. What a
+command changed, what to do next, and errors go to stderr. A failed command
+exits 1.
 
 ## Install
 
@@ -64,7 +69,6 @@ even after `cc-login use` picks another default.
 | Variable | Meaning |
 |---|---|
 | `CC_LOGIN_ROOT` | the data directory |
-| `CC_LOGIN_THEME` | `light` or `dark`: overrides the terminal background lipgloss detects |
 | `CC_LOGIN_CLAUDE` | the claude to run, instead of the first `claude` in `PATH` |
 | `CC_LOGIN_API_URL` | the Anthropic API (tests point it at a local server) |
 | `CC_LOGIN_DEBUG` | `1`: the debug log, as `--verbose` |

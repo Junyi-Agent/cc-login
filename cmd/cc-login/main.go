@@ -72,8 +72,16 @@ func execute(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	return 1
 }
 
-// say prints a line on stdout.
+// say prints a line for the user on stderr: what a command changed, and
+// what to do next. stdout carries only results (list, version), so it stays
+// clean in a pipe.
 func (c *cli) say(format string, args ...any) error {
+	_, err := fmt.Fprintf(c.err, format+"\n", args...)
+	return err
+}
+
+// print prints a line of a result on stdout.
+func (c *cli) print(format string, args ...any) error {
 	_, err := fmt.Fprintf(c.out, format+"\n", args...)
 	return err
 }

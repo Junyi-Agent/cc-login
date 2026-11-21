@@ -32,12 +32,9 @@ type Login struct {
 	Name           string     `json:"name"`
 	Kind           Kind       `json:"kind"`
 	Account        string     `json:"account,omitempty"`  // an email, as claude or the user reported it
-	OrgID          string     `json:"org_id,omitempty"`   // the organization's UUID
-	OrgName        string     `json:"org_name,omitempty"` // the organization's name
 	Plan           string     `json:"plan,omitempty"`     // claude's subscriptionType: pro, max, team...
 	KeyHint        string     `json:"key_hint,omitempty"` // an API key's last 4 characters
 	CreatedAt      time.Time  `json:"created_at"`
-	TokenSavedAt   *time.Time `json:"token_saved_at,omitempty"`   // a token login: when the token was saved
 	TokenExpiresAt *time.Time `json:"token_expires_at,omitempty"` // a token login: a year after it was saved
 }
 

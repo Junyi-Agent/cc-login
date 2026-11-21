@@ -2,10 +2,8 @@ package main
 
 import (
 	"context"
-	"os"
 
 	"github.com/spf13/cobra"
-	"golang.org/x/term"
 
 	"github.com/Junyi-Agent/cc-login/internal/ui"
 )
@@ -35,13 +33,7 @@ func (c *cli) list(ctx context.Context, asJSON bool) error {
 		return ui.JSON(c.out, views)
 	}
 
-	opt := ui.Options{Now: c.app.Now()}
-	if f, ok := c.out.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
-		if w, _, err := term.GetSize(int(f.Fd())); err == nil {
-			opt.Width = w
-		}
-	}
-	if err := ui.Table(c.out, views, opt); err != nil {
+	if err := ui.Table(c.out, views, c.app.Now()); err != nil {
 		return err
 	}
 

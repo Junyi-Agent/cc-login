@@ -16,49 +16,38 @@ func TestRenew(t *testing.T) {
 	logins := func() map[string]*state.Login {
 		old := now.Add(-24 * time.Hour)
 		return map[string]*state.Login{
-			"a1": {Name: "work", Kind: state.SignIn, OrgID: "o1", OrgName: "Old"},
+			"a1": {Name: "work", Kind: state.SignIn},
 			"t1": {Name: "ci", Kind: state.Token, Account: "ci@example.com", TokenExpiresAt: &old},
 			"k1": {Name: "api", Kind: state.APIKey},
 		}
 	}
 
-	t.Run("a sign-in: the expiry moves, the org change is noted", func(t *testing.T) {
+	t.Run("a sign-in: the new expiry and account, still the default", func(t *testing.T) {
 		f := &fake{status: map[string]claude.AuthInfo{"a1": {SignedIn: true, ExpiresAt: now.Add(time.Hour)}}}
 		a := addApp(t, logins(), "a1", f)
-		p := &prompts{}
 
-		res, err := a.Renew(ctx, "work", nil, p)
+		res, err := a.Renew(ctx, "work", nil, &prompts{})
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !res.ExpiresAt.Equal(now.Add(30 * 24 * time.Hour)) {
-			t.Errorf("expires %v", res.ExpiresAt)
-		}
-		if len(p.notes) != 1 || !strings.Contains(p.notes[0], "another one") {
-			t.Errorf("notes = %q", p.notes)
+		if !res.ExpiresAt.Equal(now.Add(30*24*time.Hour)) || res.Account != "new@example.com" {
+			t.Errorf("result = %+v", res)
 		}
 		if load(t, a).Default != "a1" {
 			t.Error("work is no longer the default")
 		}
 	})
 
-	t.Run("a sign-in whose expiry did not move", func(t *testing.T) {
-		f := &fake{status: map[string]claude.AuthInfo{"a1": {SignedIn: true, ExpiresAt: now.Add(60 * 24 * time.Hour)}}}
-		a := addApp(t, logins(), "a1", f)
-
-		if _, err := a.Renew(ctx, "work", nil, &prompts{}); err == nil || !strings.Contains(err.Error(), "did not move") {
-			t.Errorf("renew = %v", err)
-		}
-	})
-
-	t.Run("a failed sign-in keeps the old one", func(t *testing.T) {
+	t.Run("a failed sign-in changes nothing", func(t *testing.T) {
 		f := &fake{status: map[string]claude.AuthInfo{"a1": {SignedIn: true}}}
 		a := addApp(t, logins(), "a1", f)
 		f.login = func([]string, []string) error { return claude.ErrStopped }
 
-		_, err := a.Renew(ctx, "work", nil, &prompts{})
-		if !errors.Is(err, claude.ErrStopped) || !strings.Contains(err.Error(), "keeps the sign-in it had") {
+		if _, err := a.Renew(ctx, "work", nil, &prompts{}); !errors.Is(err, claude.ErrStopped) {
 			t.Errorf("renew = %v", err)
+		}
+		if _, l, _ := load(t, a).ByName("work"); l.Account != "" {
+			t.Errorf("login = %+v; want it unchanged", l)
 		}
 	})
 

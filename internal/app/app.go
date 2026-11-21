@@ -46,7 +46,7 @@ type App struct {
 	Claude Claude
 
 	CheckKey    func(ctx context.Context, key string) (anthropic.Verdict, int)
-	CheckToken  func(ctx context.Context, tok string) (anthropic.Verdict, string, int)
+	CheckToken  func(ctx context.Context, tok string) (anthropic.Verdict, int)
 	AccessToken func(ctx context.Context, dir string) (string, time.Time)
 	Usage       func(ctx context.Context, accessToken string) (anthropic.Quota, error)
 
