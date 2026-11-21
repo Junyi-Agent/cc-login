@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"slices"
 	"strings"
@@ -43,6 +44,63 @@ func (a *App) Add(ctx context.Context, name string, kind state.Kind, args []stri
 	}
 
 	return a.addLogin(id, l)
+}
+
+// ImportToken saves the OAuth token the user has (ADR 0020) as a new token
+// login name. The profile of the token is its check: HTTP 401 saves nothing;
+// no profile for another reason saves it as it is, and says so. It becomes
+// the default when there is none.
+func (a *App) ImportToken(ctx context.Context, name string, p Prompter) (Saved, error) {
+	if err := a.checkNewName(name); err != nil {
+		return Saved{}, err
+	}
+
+	valid := validPrefix("sk-ant-oat")
+
+	token, err := p.Secret("OAuth token for "+name, "An OAuth token, sk-ant-oat...; it shows as *.", valid)
+	if err != nil {
+		return Saved{}, err
+	}
+	if err = valid(token); err != nil {
+		return Saved{}, err
+	}
+
+	l := &state.Login{Name: name, Kind: state.Token, CreatedAt: a.Now().UTC()}
+	if err = a.checkImported(ctx, l, token, p); err != nil {
+		return Saved{}, err
+	}
+
+	id, err := a.Store.NewDir()
+	if err != nil {
+		return Saved{}, err
+	}
+	if err = creds.WriteSecret(a.Store.Dir(id), state.Token, token); err != nil {
+		_ = os.RemoveAll(a.Store.Dir(id)) // nothing left behind
+		return Saved{}, err
+	}
+
+	return a.addLogin(id, l)
+}
+
+// checkImported reads the profile of an imported token into l. It fails only
+// when the server does not know the token.
+func (a *App) checkImported(ctx context.Context, l *state.Login, token string, p Prompter) error {
+	pr, err := a.Profile(ctx, token)
+	a.Log.Debug("import token", "login", l.Name, "ok", err == nil)
+
+	var se anthropic.StatusError
+	switch {
+	case errors.As(err, &se) && se.Code == http.StatusUnauthorized:
+		return errors.New("the Anthropic API rejected the token (HTTP 401); nothing saved")
+	case err != nil:
+		p.Note(fmt.Sprintf("Could not read the profile of the token (%s); saving it as it is, without account, plan or quota.", err))
+		return nil
+	}
+
+	l.Scopes = oauth.Scopes
+	l.Org, l.Account = pr.Org, pr.Email
+	l.Plan = pr.Plan()
+	return nil
 }
 
 // checkNewName checks that name can name a new login.

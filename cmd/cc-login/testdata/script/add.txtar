@@ -31,6 +31,21 @@ stdout 'Login successful'
 stderr 'Added login home \(new@example.com\)'
 stderr 'Make it the default with: cc-login use home'
 
+# An imported token (ADR 0020): the API is unreachable in tests, so it is
+# saved as it is, with a note, and not echoed. Other values are refused.
+stdin imported
+exec cc-login add old --import-token
+stderr 'Added login old\.'
+stderr 'Could not read the profile'
+! stderr 'oat01-fake'
+exec cc-login list
+stdout '^ +old '
+stdin key
+! exec cc-login add old2 --import-token
+stderr 'not a sk-ant-oat'
+! exec cc-login add old3 --import-token --api-key
+stderr 'none of the others can be'
+
 # Already there.
 stdin key
 ! exec cc-login add api --api-key
@@ -62,6 +77,8 @@ exec cc-login list
 
 -- code --
 c0de-xyz#not-this-sign-in
+-- imported --
+sk-ant-oat01-fake-token-wxyz
 -- key --
 sk-ant-api03-fake-wxyz
 -- creds --
