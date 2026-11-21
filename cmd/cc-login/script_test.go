@@ -60,6 +60,20 @@ func fakeClaude() {
 		os.Exit(1)
 	}
 
+	if strings.HasPrefix(args, "auth login") {
+		// A second sign-in expires later than the first.
+		expires := "2030-01-01T00:00:00Z"
+		if _, err := os.Stat(filepath.Join(dir, "fake-status.json")); err == nil { //nolint:gosec // G703: a test fake
+			expires = "2031-01-01T00:00:00Z"
+		}
+		status := `{"loggedIn": true, "email": "new@example.com", "loginExpiresAt": "` + expires + `"}`
+		if err := os.WriteFile(filepath.Join(dir, "fake-status.json"), []byte(status), 0o600); err != nil { //nolint:gosec // G703: a test fake
+			os.Exit(1)
+		}
+		fmt.Println("Login successful")
+		return
+	}
+
 	if args == "auth logout" {
 		_ = os.Remove(filepath.Join(dir, "fake-status.json")) //nolint:gosec // G703: a test fake
 		fmt.Println("Successfully logged out")

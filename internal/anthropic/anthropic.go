@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/Junyi-Agent/cc-login/internal/quota"
@@ -92,4 +93,80 @@ func (c *Client) Usage(ctx context.Context, accessToken string) (quota.Quota, er
 	}
 
 	return q, nil
+}
+
+// Verdict is what the API said about a key or a token.
+type Verdict int
+
+// The verdicts.
+const (
+	Accepted Verdict = iota
+	Rejected         // HTTP 401 or 403
+	Unknown          // no answer, or another status: the network, a rate limit, an outage
+)
+
+// verdict reads an HTTP status; 0 is no response.
+func verdict(status int) Verdict {
+	switch status {
+	case http.StatusOK:
+		return Accepted
+	case http.StatusUnauthorized, http.StatusForbidden:
+		return Rejected
+	}
+	return Unknown
+}
+
+// CheckKey asks the API whether it accepts API key key: a free request that
+// lists the models. status is the HTTP status, 0 without a response.
+func (c *Client) CheckKey(ctx context.Context, key string) (v Verdict, status int) {
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+"/v1/models", nil)
+	if err != nil {
+		return Unknown, 0
+	}
+	req.Header.Set("x-api-key", key)
+	req.Header.Set("anthropic-version", "2023-06-01")
+
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return Unknown, 0
+	}
+	_ = resp.Body.Close()
+
+	return verdict(resp.StatusCode), resp.StatusCode
+}
+
+// CheckToken asks the API whether it accepts token tok from claude
+// setup-token: a token count, which is free and uses no quota. org is the
+// organization the token belongs to (the anthropic-organization-id header).
+// A response with that header proves the token authenticated, whatever its
+// status (a retired model gives 404).
+func (c *Client) CheckToken(ctx context.Context, tok string) (v Verdict, org string, status int) {
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+
+	body := strings.NewReader(`{"model":"claude-haiku-5-5","messages":[{"role":"user","content":"hi"}]}`)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/v1/messages/count_tokens", body)
+	if err != nil {
+		return Unknown, "", 0
+	}
+	req.Header.Set("Authorization", "Bearer "+tok)
+	req.Header.Set("anthropic-beta", "oauth-2025-04-20")
+	req.Header.Set("anthropic-version", "2023-06-01")
+	req.Header.Set("content-type", "application/json")
+
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return Unknown, "", 0
+	}
+	_ = resp.Body.Close()
+
+	org = strings.ReplaceAll(resp.Header.Get("anthropic-organization-id"), " ", "")
+	v = verdict(resp.StatusCode)
+	if v == Unknown && org != "" {
+		v = Accepted
+	}
+	return v, org, resp.StatusCode
 }

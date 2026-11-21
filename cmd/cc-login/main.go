@@ -89,7 +89,14 @@ func (c *cli) list(ctx context.Context, format string) error {
 			opt.Width = w
 		}
 	}
-	return ui.Table(c.out, views, opt)
+	if err := ui.Table(c.out, views, opt); err != nil {
+		return err
+	}
+
+	if stray := c.app.StrayCredentials(); stray != "" {
+		c.errf("%s holds a sign-in that a claude run without cc-login wrote; move it into a login with: cc-login adopt NAME", stray)
+	}
+	return nil
 }
 
 // migrate converts the zsh version's data layout and says what it did.

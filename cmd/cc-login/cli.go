@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+
+	"github.com/Junyi-Agent/cc-login/internal/state"
 )
 
 // command builds the cobra tree: the commands, their options, the argument
@@ -19,9 +21,7 @@ func (c *cli) command() *cobra.Command {
 		Short: "Several Claude Code logins on one machine",
 		Long: `cc-login keeps several Claude Code logins on one machine, and the default login,
 the one new claude launches use. Without a command it lists the logins.
-
-add and renew are not ported yet: they still run in cc-login.zsh, on the old
-data layout.`,
+`,
 		Args: c.noCommand,
 		// cobra sets this default only on its own unknown-command path.
 		SuggestionsMinimumDistance: 2,
@@ -63,12 +63,23 @@ data layout.`,
 		Long: `Save login NAME. Without an option, read a token from claude setup-token
 (sk-ant-oat...) without echo and check it with the Anthropic API; it lasts a
 year. For an existing login NAME the token overrides its stored sign-in.
-A new login becomes the default when the machine has none.`,
+A new login becomes the default when the machine has none.
+
+Without a terminal, the key or token is one line of stdin.`,
 		Example: `  cc-login add work
   cc-login add work --sign-in -- --email me@example.com
   cc-login add ci --api-key`,
 		Args: c.nameThenOpts,
-		RunE: c.runs(c.notPorted),
+		RunE: c.runs(func(cmd *cobra.Command, args []string) error {
+			kind := state.Token
+			if v, _ := cmd.Flags().GetBool("api-key"); v {
+				kind = state.APIKey
+			}
+			if v, _ := cmd.Flags().GetBool("sign-in"); v {
+				kind = state.SignIn
+			}
+			return c.add(cmd.Context(), args[0], kind, args[1:])
+		}),
 	}
 	add.Flags().Bool("sign-in", false, "sign in with claude auth login, which keeps the sign-in in the macOS Keychain; its options go after --")
 	add.Flags().Bool("api-key", false, "save an Anthropic API key (sk-ant-...), read without echo and checked with the Anthropic API")
@@ -103,7 +114,9 @@ that it expires later; OPTS are options for claude auth login. For a token
 login, save a new token from claude setup-token.`,
 		Args:              c.nameThenOpts,
 		ValidArgsFunction: c.completeName,
-		RunE:              c.runs(c.notPorted),
+		RunE: c.runs(func(cmd *cobra.Command, args []string) error {
+			return c.renew(cmd.Context(), args[0], args[1:])
+		}),
 	}
 
 	rename := &cobra.Command{
@@ -140,7 +153,19 @@ the zsh cc-login cannot read the logins. Running it again does nothing.`,
 		RunE: c.runs(func(*cobra.Command, []string) error { return c.migrate() }),
 	}
 
-	root.AddCommand(list, use, add, run, renew, rename, remove, migrate)
+	adopt := &cobra.Command{
+		Use:   "adopt NAME",
+		Short: "Move ~/.claude/.credentials.json into a new login NAME",
+		Long: `A claude run without cc-login (an IDE extension, a plain ssh session) signs in
+into ~/.claude/.credentials.json. adopt moves that file into a new login NAME;
+it moves it, never copies it, because two copies of one sign-in invalidate
+each other. claude sessions that read it from ~/.claude lose their
+credentials. cc-login list says when there is such a file.`,
+		Args: cobra.ExactArgs(1),
+		RunE: c.runs(func(cmd *cobra.Command, args []string) error { return c.adopt(cmd.Context(), args[0]) }),
+	}
+
+	root.AddCommand(list, use, add, run, renew, rename, remove, adopt, migrate)
 	return root
 }
 
@@ -222,10 +247,6 @@ func splitDash(cmd *cobra.Command, args []string) (string, []string) {
 		name = args[0]
 	}
 	return name, args[dash:]
-}
-
-func (c *cli) notPorted(cmd *cobra.Command, _ []string) error {
-	return fmt.Errorf("%s is not ported to Go yet; run it with the zsh cc-login", cmd.Name())
 }
 
 // completeName completes a login name as the first argument.

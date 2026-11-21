@@ -2,6 +2,7 @@
 package claude
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -12,7 +13,10 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"syscall"
 	"time"
+
+	"golang.org/x/term"
 
 	"github.com/Junyi-Agent/cc-login/internal/creds"
 	"github.com/Junyi-Agent/cc-login/internal/state"
@@ -165,4 +169,64 @@ func Logout(ctx context.Context, path string, env []string) error {
 		return fmt.Errorf("%w: %s", err, bytes.TrimSpace(out))
 	}
 	return nil
+}
+
+// ErrStopped means the user stopped claude auth login (Ctrl-C).
+var ErrStopped = errors.New("stopped")
+
+// SignIn runs `claude auth login ARGS` with env, on this terminal. args are
+// options such as --email, never secrets.
+//
+// When stdin is a terminal, claude's stdin is a pipe and cc-login passes it
+// each line typed or pasted: claude reading a pasted code from a raw
+// terminal can split it and reject it as an invalid code. A wrong code can
+// be pasted again; finishing in the browser ends claude. Otherwise claude
+// reads cc-login's stdin.
+func SignIn(ctx context.Context, path string, env, args []string) error {
+	cmd := exec.CommandContext(ctx, path, append([]string{"auth", "login"}, args...)...)
+	cmd.Env = env
+	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+	cmd.Cancel = func() error { return cmd.Process.Signal(syscall.SIGTERM) }
+
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		cmd.Stdin = os.Stdin
+		return stopped(ctx, cmd.Run())
+	}
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		return err
+	}
+	cmd.Stdin = r
+
+	if err = cmd.Start(); err != nil {
+		_ = r.Close()
+		_ = w.Close()
+		return err
+	}
+	_ = r.Close() // claude has its end
+
+	// Relay lines until claude exits. The goroutine may stay blocked in a
+	// read of the terminal after that; cc-login exits soon after.
+	go func() {
+		sc := bufio.NewScanner(os.Stdin)
+		for sc.Scan() {
+			if _, errW := fmt.Fprintln(w, sc.Text()); errW != nil {
+				return
+			}
+		}
+	}()
+
+	err = cmd.Wait()
+	_ = w.Close()
+	return stopped(ctx, err)
+}
+
+// stopped is err, or ErrStopped when ctx was cancelled (Ctrl-C): claude
+// exits 0 when it is stopped.
+func stopped(ctx context.Context, err error) error {
+	if ctx.Err() != nil {
+		return ErrStopped
+	}
+	return err
 }

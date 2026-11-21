@@ -4,6 +4,7 @@ package state
 
 import (
 	"cmp"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -227,4 +228,34 @@ func (st *State) Names() []string {
 		names = append(names, st.Logins[id].Name)
 	}
 	return names
+}
+
+// NewDir makes an empty credentials directory (0700) with a new random ID.
+// The login is not in state.json until the caller adds it.
+func (s *Store) NewDir() (string, error) {
+	if err := os.MkdirAll(filepath.Join(s.Root, ".dirs"), 0o700); err != nil {
+		return "", err
+	}
+
+	const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	for range 10 {
+		b := make([]byte, 8)
+		if _, err := rand.Read(b); err != nil {
+			return "", err
+		}
+		for i := range b {
+			b[i] = letters[int(b[i])%len(letters)]
+		}
+
+		id := string(b)
+		err := os.Mkdir(s.Dir(id), 0o700)
+		if err == nil {
+			return id, nil
+		}
+		if !errors.Is(err, os.ErrExist) {
+			return "", err
+		}
+	}
+
+	return "", errors.New("could not find a free directory name")
 }

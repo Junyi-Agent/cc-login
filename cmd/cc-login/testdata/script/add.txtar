@@ -1,0 +1,60 @@
+# Without a terminal the token is a line of stdin. The API is unreachable in
+# tests, so the token is saved unchecked.
+stdin token
+exec cc-login add ci
+stdout 'Added login ci\.'
+stdout 'The token expires about'
+stdout 'It is the default login\.'
+stderr 'claude setup-token'
+stderr 'saving it unchecked'
+! stderr 'fake-token'
+exec cc-login run
+stdout 'dir .*; key false; token true'
+
+# A key, after the first login: not the default.
+stdin key
+exec cc-login add api --api-key
+stdout 'Make it the default with: cc-login use api'
+exec cc-login list --format '{{.Name}} {{.Kind}} {{.Account}}'
+stdout '^api api-key API key …wxyz$'
+
+# A sign-in through claude auth login, options after --.
+exec cc-login add home --sign-in -- --email new@example.com
+stdout 'Login successful'
+stdout 'Added login home \(new@example.com\)'
+
+# Already there.
+stdin token
+! exec cc-login add ci
+stderr 'cc-login renew ci'
+! exec cc-login add home --sign-in
+stderr 'login home is signed in'
+! exec cc-login add bad --api-key
+stderr 'no input'
+! exec cc-login add ci2 -- --email x
+stderr 'need --sign-in'
+
+# renew: a sign-in again; a key never expires.
+exec cc-login renew home -- --email new@example.com
+stdout 'Renewed login home; it expires 2031-01-01'
+! exec cc-login renew api
+stderr 'does not expire'
+
+# adopt moves ~/.claude/.credentials.json into a new login.
+env CLAUDE_CONFIG_DIR=$WORK/dotclaude
+mkdir dotclaude
+cp creds dotclaude/.credentials.json
+exec cc-login list
+stderr 'cc-login adopt NAME'
+exec cc-login adopt stray
+stdout 'into login stray'
+! exists dotclaude/.credentials.json
+exec cc-login list
+! stderr 'adopt'
+
+-- token --
+sk-ant-oat01-fake-token
+-- key --
+sk-ant-api03-fake-wxyz
+-- creds --
+{"claudeAiOauth": {}}
