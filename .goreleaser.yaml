@@ -1,0 +1,23 @@
+version: 2
+
+project_name: cc-login
+
+builds:
+  - main: ./cmd/cc-login
+    binary: cc-login
+    env:
+      - CGO_ENABLED=0
+    goos: [darwin, linux]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags: [-s -w]
+
+archives:
+  - formats: [tar.gz]
+    files: [README.md]
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  use: github

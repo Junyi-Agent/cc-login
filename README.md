@@ -1,0 +1,112 @@
+---
+tags: [cc-login, golang, claude-code]
+---
+
+# cc-login (Go)
+
+A Go port of `cc-login.zsh`: several Claude Code logins on one machine, and the
+default login that new `claude` launches use. It reads and writes the same data
+directory as the zsh version (`$XDG_DATA_HOME/claude-logins`, or
+`~/.local/share/claude-logins`), so the two can run side by side during the port.
+
+## Status
+
+| Command | Status |
+|---|---|
+| `list` | ported; output matches the zsh version byte for byte, with and without color, at several terminal widths |
+| `list --json` | new in Go: a JSON array, one object per login (see below) |
+| `help` | stub: lists only the ported commands |
+| `use` `add` `run` `renew` `rename` `remove` | not ported: the binary says to use the zsh version |
+| set-up, adopting `~/.claude/.credentials.json` and `.pending` | not ported: `list` only warns |
+| zsh shim (preexec export, zstyle → env, completion) | not written: [ADR 0004](docs/adr/0004-zsh-shim-exports-env.md), [ADR 0005](docs/adr/0005-zstyle-to-env.md) |
+
+`list` runs `claude auth status` and the quota request for every login in
+parallel: about 0.3 s for 8 logins, against about 2 s in zsh.
+
+### `list --json`
+
+```json
+[
+  {
+    "name": "work",
+    "default": true,
+    "account": "me@company.com",
+    "plan": "team",
+    "kind": "sign-in",
+    "status": "signed in",
+    "expires_at": "2026-11-21T01:08:00Z",
+    "five_hour": {"left_percent": 73, "resets_at": "2026-11-20T13:00:00Z"},
+    "seven_day": {"left_percent": 24, "resets_at": "2026-11-22T00:00:00Z"},
+    "quota_source": "live"
+  }
+]
+```
+
+`kind` is `sign-in`, `token` or `api-key`; `status` is the STATUS column;
+`quota_source` is `live`, `cache` (then `cached_at` is set) or `null`. Unknown
+values are `null`.
+
+## Settings
+
+| Variable | Meaning |
+|---|---|
+| `CC_LOGIN_ROOT` | the data directory |
+| `CC_LOGIN_THEME` | `light` or `dark`: the accent of the default login (zstyle `theme` in zsh) |
+| `CC_LOGIN_QUOTA_CACHE` | the quota cache file (zstyle `quota-cache` in zsh) |
+| `NO_COLOR` | no colors |
+
+## Install
+
+```sh
+go install github.com/Junyi-Agent/cc-login/cmd/cc-login@latest
+```
+
+Releases (`v*` tags) also publish darwin and linux binaries.
+
+## Development
+
+```sh
+brew install go pre-commit      # or: pipx install pre-commit
+pre-commit install              # pre-commit and pre-push hooks
+go build -o bin/cc-login ./cmd/cc-login
+pre-commit run --all-files      # what CI runs
+```
+
+Compare with the zsh version (`CC_LOGIN_ZSH` is the path of `cc-login.zsh`):
+
+```sh
+diff <(NO_COLOR=1 zsh -f -c 'source "$CC_LOGIN_ZSH"; cc-login list') \
+     <(NO_COLOR=1 ./bin/cc-login list)
+```
+
+The quota is live data and can change between two requests; when only a
+quota cell differs, run it again.
+
+Workflow rules (worktrees, the pre-push review gate, ADRs) are in
+[CLAUDE.md](CLAUDE.md); decisions in [docs/adr](docs/adr/README.md).
+
+## Layout
+
+| Package | What it does | zsh counterpart |
+|---|---|---|
+| `internal/store` | data directory: names, links, `current`, records, login kind | `_cc_login_dir`, `_cc_login_names`, `_cc_login_default` |
+| `internal/claude` | env for one login, `claude auth status` | `_cc_login_with`, `_cc_login_stored` |
+| `internal/creds` | access token from `.credentials.json` or the Keychain | `_cc_login_token` |
+| `internal/quota` | `api/oauth/usage` and the quota cache | `_cc_login_quota`, `_cc_login_cached_quota` |
+| `internal/listing` | gather in parallel, format, render, JSON | `_cc_login_state`, `_cc_login_list` |
+| `cmd/cc-login` | argument parsing | `cc-login()` |
+
+## Plan
+
+1. ~~`list`~~, ~~`list --json`~~
+2. move argument parsing to cobra, keeping the zsh version's messages and exit
+   codes; `cc-login completion zsh` ([ADR 0006](docs/adr/0006-cobra-and-bubbletea.md))
+3. `use`, `run` (`syscall.Exec` into claude), `rename`, `remove`, and the
+   check / adopt flow, with `--yes` and a non-terminal failure instead of a
+   prompt, tested on a temporary data directory
+4. `add` / `renew`: no-echo reads, key and token checks, the
+   `claude auth login` code relay
+5. the zsh shim (ADR 0004, 0005)
+6. `cc-login tui`: bubbletea (ADR 0006)
+7. `cc-login statusline` and `cc-login quota-refresh`, replacing the Python
+   status line and quota refresh scripts, so the login layout lives in one place

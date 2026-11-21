@@ -1,0 +1,28 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  pre-commit:
+    # macOS too: the Keychain code path only runs on darwin.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7.0.0
+        with:
+          go-version-file: go.mod
+      - run: pipx install pre-commit
+      # The same hooks as a local commit: formatters, golangci-lint, go mod tidy,
+      # go test -race, and the hook and review-gate tests. The pre-push review
+      # gate is not part of this stage.
+      - run: pre-commit run --all-files --show-diff-on-failure

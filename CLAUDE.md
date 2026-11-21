@@ -1,0 +1,55 @@
+# cc-login (Go)
+
+`cc-login.zsh` 的 Go 移植：一台机器上管理多个 Claude Code 登录。两个版本共用同一个数据目录（`$XDG_DATA_HOME/claude-logins`），移植期间并存。用法、目录结构和移植进度见 [[README]]。
+
+## 开发流程
+
+- 每个新功能或修改在仓库目录之外建 worktree 开发：
+  `git worktree add ../go-cc-login-<feature> -b <feature> origin/main`
+- 不在当前目录切换分支（`git checkout <branch>` / `git switch`）。
+- 不在 `main` 上提交，不 push 到 `main`。push feature 分支后开 PR，CI 通过后用 `gh pr merge --squash` 合并。
+- 不用 `--no-verify`、`SKIP=`、`core.hooksPath` 跳过 git hook。
+- 以上规则由 `.claude/hooks/git_guard.py`（PreToolUse hook）强制执行；`gh pr merge` 会先跑 `gh pr checks`，检查没全过就拒绝。见 [[docs/adr/0001-worktree-and-git-guard]]、[[docs/adr/0003-merge-requires-green-ci]]。
+- 推送前问用户；推送用 `gh` 的当前账户，先用 `gh auth status` 确认是 `Junyi-Agent`。
+- 远端还没有 `main` 时，第一次提交和 `git push -u origin main` 由人类在终端完成（git guard 会拦 agent）；审查门禁在这种情况下审查全部内容。
+
+## push 审查门禁
+
+push 时 pre-push hook 跑 `scripts/review_gate.py`：3 个 Claude 分别从正确性、与 zsh 版行为一致、凭据安全与流程审查 `origin/main` 之后的改动，≥2 个同意才放行。被拒时按输出里的 blocking issues 改完再 push。需要本机装好并登录 `claude` CLI。见 [[docs/adr/0002-pre-push-review-gate]]。
+
+## 本地检查
+
+新机器或新 worktree 先装工具和 hook（同时装 pre-commit 和 pre-push 两个阶段）：
+
+```bash
+brew install go pre-commit   # 或 pipx install pre-commit
+pre-commit install
+```
+
+提交前会跑：YAML/JSON 校验、`golangci-lint fmt`（gofmt + goimports）、`golangci-lint run`（规则见 `.golangci.yml`）、`go mod tidy -diff`、`go test -race ./...`，改到对应文件时还跑 git guard 和审查门禁的单元测试。手动全量跑：`pre-commit run --all-files`。CI（`.github/workflows/ci.yml`）在 Ubuntu 和 macOS 上跑同一套配置。
+
+## 移植规则
+
+- 移植的命令要和 zsh 版逐字节一致：输出（含颜色和窄终端下的截断）、退出码、写的文件、数据目录布局。验收方法：设 `CC_LOGIN_ZSH` 为 `cc-login.zsh` 的路径，跑 README 里的 `diff` 命令。配额是实时数据，相邻两次请求之间可能变，不一致时再跑一次确认。
+- Go 版新增、zsh 版没有的功能（如 `list --json`）写进 README 的状态表。
+- zstyle 设置由 zsh shim 转成环境变量（`CC_LOGIN_THEME`、`CC_LOGIN_QUOTA_CACHE`），Go 不读 zstyle。
+- 不改变凭据目录的路径字符串：Keychain 条目名是这个路径的 SHA-256 前 8 位，路径一变，login 就显示未登录。
+
+## 安全
+
+- 一个 login 的 API key 或 token 只能出现在这个 login 的 claude 进程环境里：不进其他 login 的进程、不进日志和错误信息、不进命令行参数（`ps` 看得见），文件权限 0600。
+- 仓库是公开的：不提交本机路径、邮箱、账号名、凭据。测试数据用 `example.com` 之类的假值。
+
+## 约定
+
+- 流程或架构决策写 ADR（`docs/adr/`）。状态分三种：提议 = 只写了文档；采纳 = 允许实现，可能已实现；已验证 = 人类测试了代码并确认。agent 最多改到「采纳」，「已验证」只由人类改。
+- 测试不碰真实凭据和网络：外部调用（claude、Keychain、HTTP）都通过可替换的函数注入。
+
+## 已知的故意设计
+
+审查（`/jy-repo-review`）不把下列行为当问题上报。
+
+- `cmd/cc-login/main.go` 里读 `CLAUDE_CONFIG_DIR` 拼路径处的 `//nolint:gosec`（G703）：这个变量是用户自己的设置，Claude Code 也这样读。
+- `.golangci.yml` 对 `internal/claude`、`internal/creds` 豁免 G204：运行 `claude` 和 `security` 的参数由 cc-login 自己拼，不经过 shell。
+- `checkSetUp` 只提示、不处理 `~/.claude/.credentials.json` 和 `.pending`：收编流程要提问并移动文件，还没移植，由 zsh 版做。
+- `git_guard.py` 和 `review_gate.py` 来自 `Junyi-Agent/skills`，`review_gate.py` 改了审查方向，并在远端为空时审查全部内容。
