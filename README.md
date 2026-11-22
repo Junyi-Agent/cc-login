@@ -1,7 +1,3 @@
----
-tags: [cc-login, golang, claude-code]
----
-
 # cc-login
 
 Keep several Claude Code logins on one machine and switch between them; each
