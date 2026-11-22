@@ -46,6 +46,7 @@ git tag v0.2.0 origin/main && git push origin v0.2.0
 | `internal/claude` | find claude; run `claude auth status`, `login` and `logout` |
 | `internal/anthropic` | the Anthropic API: the plan quota, checking a key |
 | `internal/oauth` | a token login's sign-in: the link, and the trade of the pasted code for a token |
+| `internal/seal` | the encryption of an export file: a passphrase, PBKDF2-SHA256 and AES-256-GCM ([ADR 0021](adr/0021-export-import.md)) |
 | `internal/app` | what each command does, one file per command; no output, no cobra |
 | `internal/ui` | the table and the JSON of `list` |
 | `cmd/cc-login` | the command line (cobra): one file per command, with its help and what it prints |

@@ -56,7 +56,8 @@ shows the logins.
 
 	root.AddCommand(
 		c.listCmd(), c.useCmd(), c.addCmd(), c.runCmd(), c.renewCmd(),
-		c.renameCmd(), c.removeCmd(), c.adoptCmd(), c.doctorCmd(), c.versionCmd(),
+		c.renameCmd(), c.removeCmd(), c.adoptCmd(), c.exportCmd(), c.importCmd(),
+		c.doctorCmd(), c.versionCmd(),
 	)
 	return root
 }
