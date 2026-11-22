@@ -1,0 +1,76 @@
+# export and import (ADR 0021): token and API key logins move to another
+# data root in a file encrypted with a passphrase; a sign-in stays.
+stdin key
+exec cc-login add api --api-key
+stdin token
+exec cc-login add ci --import-token
+exec cc-login use ci
+exec cc-login add home --sign-in
+
+# Without a terminal the passphrase is a line of stdin, twice. The file
+# holds neither the names nor the secrets.
+stdin pass2
+exec cc-login export logins.cc
+! stdout .
+stderr 'Exported api, ci to logins\.cc\.'
+stderr 'Left out sign-in logins home'
+stderr 'delete it after the import'
+! stderr 'passphrase-1'
+! grep 'fake|"ci"|"api"' logins.cc
+exists logins.cc
+
+# It does not overwrite a file, export a sign-in, or take a short or
+# mistyped passphrase.
+stdin pass2
+! exec cc-login export logins.cc
+stderr 'logins\.cc exists'
+! exec cc-login export other.cc home
+stderr 'login home is a sign-in'
+stdin short
+! exec cc-login export other.cc
+stderr 'at least 8 characters'
+stdin mistyped
+! exec cc-login export other.cc
+stderr 'not the same passphrase'
+! exists other.cc
+
+# Another machine: the logins and the default come over, with their key
+# and token.
+env CC_LOGIN_ROOT=$WORK/other
+stdin wrong
+! exec cc-login import logins.cc
+stderr 'wrong passphrase, or the file was changed'
+stdin pass1
+exec cc-login import logins.cc
+! stdout .
+stderr 'Imported api, ci\.'
+stderr 'ci is the default login\.'
+! stderr 'passphrase-1'
+exec cc-login run
+stdout 'key false; token true'
+exec cc-login run api
+stdout 'key true; token false'
+
+# Again: both names are there, so both are skipped.
+stdin pass1
+exec cc-login import logins.cc
+stderr 'Imported no logins\.'
+stderr 'Skipped api, ci: this machine has a login of that name'
+
+-- key --
+sk-ant-api03-fake-wxyz
+-- token --
+sk-ant-oat01-fake-token-wxyz
+-- pass1 --
+passphrase-1
+-- pass2 --
+passphrase-1
+passphrase-1
+-- short --
+short
+short
+-- mistyped --
+passphrase-1
+passphrase-2
+-- wrong --
+passphrase-x

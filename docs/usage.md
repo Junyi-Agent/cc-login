@@ -21,6 +21,8 @@ The short version is in [[README]]. `cc-login --help` and
 | `add NAME` | a new login: an OAuth token (the default, `--oauth-token`; see below), an API key (`--api-key`, checked with the API), a token you already have (`--import-token`, [ADR 0020](adr/0020-import-token.md); without `user:profile` it has no account, plan or quota, and its expiry is unknown), or a sign-in (`--sign-in [-- OPTS]`, through `claude auth login`); the key, token or code is shown as `*` while typed; without a terminal it is a line of stdin |
 | `renew NAME [-- OPTS]` | signs a login in again so it expires later; a new OAuth token for a token login |
 | `doctor` | checks the setup, offline: claude, the `claude` link, keys and tokens set in the shell, `state.json`, each login's files and expiry; prints what to do for each problem; exit 1 when something does not work ([ADR 0019](adr/0019-doctor.md)) |
+| `export FILE [NAME...]` | writes token and API key logins (all, or those named) into a new file, encrypted with a passphrase typed twice; sign-in logins stay on this machine ([ADR 0021](adr/0021-export-import.md)) |
+| `import FILE` | adds the logins of an export file after asking its passphrase; a name this machine has is skipped; nothing is checked online |
 | `adopt NAME` | moves `~/.claude/.credentials.json`, written by a claude run without cc-login, into a new login (`list` says when there is one) |
 
 A token login signs in with OAuth ([ADR 0017](adr/0017-own-oauth.md)):
@@ -44,6 +46,23 @@ once; Ctrl-C stops it. The table shows how long until a login expires; `list
 stdout carries only results: the `list` table or JSON, and `version`. What a
 command changed, what to do next, and errors go to stderr. A failed command
 exits 1.
+
+## Moving logins to another machine
+
+```sh
+cc-login export logins.cc          # on this machine; asks a passphrase twice
+cc-login import logins.cc          # on the other one; asks it again
+rm logins.cc
+```
+
+The file is encrypted (PBKDF2-SHA256 and AES-256-GCM) and written 0600; it
+never overwrites a file. Without a terminal the passphrase is a line of
+stdin, twice for `export`. The key or token then works on both machines:
+`remove` on one does not revoke it on the other. A sign-in login's
+credentials hold a refresh token that one machine's refresh would take from
+the other, so they stay: on the other machine run `cc-login add NAME
+--sign-in`. When the other machine has no default login, the file's default
+becomes it.
 
 ## Install
 
