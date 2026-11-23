@@ -2,9 +2,11 @@
 """PreToolUse hook (Bash): enforce the worktree workflow from CLAUDE.md.
 
 Denies switching branches in place, creating commits on main (commit, merge, cherry-pick,
-revert, am), pushing to main, skipping the git hooks (--no-verify, SKIP=, core.hooksPath,
-including through GIT_CONFIG_* variables), and merging a PR whose CI checks have not all
-passed (`gh pr merge`, or the merge endpoint through `gh api`).
+revert, am), pushing to main, skipping the git hooks (--no-verify or an abbreviation of
+it such as --no-veri, SKIP=, core.hooksPath, including through GIT_CONFIG_* variables set
+in front of the command or with `export` earlier in the command line), and merging a PR
+whose CI checks have not all passed (`gh pr merge`, or the merge endpoint through `gh api`).
+Commands are recognised by their base name, so `/usr/bin/git` counts as `git`.
 
 The branch is read from the directory each git command actually runs in: `cd <dir>`,
 `pushd`/`popd` earlier in the same command, `( ... )` subshells, `env -C <dir>` and
@@ -67,6 +69,8 @@ WRAPPERS = {"command", "exec", "nohup", "time", "builtin"}
 WRAPPER_VALUE_OPTS = {"-a", "-f", "-o", "--format", "--output"}
 ENV_VALUE_OPTS = {"-u", "--unset"}
 SHELLS = {"bash", "sh", "zsh", "dash", "ksh"}
+# Builtins that can put a variable in the environment of the commands after them.
+EXPORTERS = {"export", "declare", "typeset"}
 # Git does not let an alias shadow a built-in command, so these are never looked up.
 GIT_BUILTINS = {
     "add", "am", "apply", "archive", "bisect", "blame", "branch", "bundle", "cat-file",
@@ -216,19 +220,31 @@ def env_flags(assignment: str) -> set[str]:
     return flags
 
 
+def exported_flags(args: list[str]) -> set[str]:
+    """env_flags of the `VAR=value` arguments of `export`, `declare -x` and the like."""
+    flags: set[str] = set()
+    for a in args:
+        if ASSIGNMENT.match(a):
+            flags |= env_flags(a)
+    return flags
+
+
 def unwrap(seg: list[str], cwd: str) -> tuple[list[str], set[str], str]:
     """Drop leading `VAR=x` words and wrappers.
 
     Returns the command, the hook-skipping flags its environment sets (see env_flags),
     and the directory it runs in (`env -C <dir>` changes it for this command only).
     """
+    # Only `VAR=x` in front of a command is seen here. `export SKIP=x` followed by a
+    # separate `git push` is not caught: ADR 0001 accepts that limitation. `export` of a
+    # GIT_CONFIG_* variable that sets core.hooksPath is denied in check() instead.
     flags: set[str] = set()
     while seg:
         word = seg[0]
         if ASSIGNMENT.match(word):
             flags |= env_flags(word)
             seg = seg[1:]
-        elif word == "env":
+        elif os.path.basename(word) == "env":
             seg = seg[1:]
             while seg and seg[0].startswith("-"):
                 opt = seg[0]
@@ -246,7 +262,7 @@ def unwrap(seg: list[str], cwd: str) -> tuple[list[str], set[str], str]:
                     seg = shlex.split(opt[2:]) + seg[1:]
                 else:
                     seg = seg[2:] if opt in ENV_VALUE_OPTS else seg[1:]
-        elif word in WRAPPERS:
+        elif os.path.basename(word) in WRAPPERS:
             seg = seg[1:]
             while seg and seg[0].startswith("-"):
                 seg = seg[2:] if seg[0] in WRAPPER_VALUE_OPTS else seg[1:]
@@ -386,6 +402,14 @@ def checkout_switches(rest: list[str], cwd: str) -> bool:
     return is_commit(cwd, target) or not os.path.exists(resolve(cwd, target))
 
 
+def is_no_verify(arg: str) -> bool:
+    """`--no-verify`, or an abbreviation git accepts for it (`--no-veri`, `--no-verif`).
+
+    `--no-ver` is left out: git rejects it as ambiguous with `--no-verbose`.
+    """
+    return arg.startswith("--no-veri") and "--no-verify".startswith(arg)
+
+
 def creates_commit(sub: str, rest: list[str]) -> bool:
     if sub not in NO_COMMIT_OPTS:
         return False
@@ -411,6 +435,7 @@ def pr_checks(args: list[str], cwd: str) -> tuple[int, str]:
 
 def check_pr_merge(rest: list[str], cwd: str) -> str | None:
     selector, repo, i = [], [], 0
+
     while i < len(rest):
         a = rest[i]
         if a in GH_VALUE_OPTS and i + 1 < len(rest):
@@ -423,9 +448,11 @@ def check_pr_merge(rest: list[str], cwd: str) -> str | None:
         elif not a.startswith("-"):
             selector = [a]
         i += 1
+
     code, output = pr_checks(selector + repo, cwd)
     if code == 0:
         return None
+
     return (
         "Do not merge: the PR's CI checks have not all passed (gh pr checks exit "
         f"{code}). Wait for CI or fix it, then merge.\n{output[-1500:]}"
@@ -435,25 +462,34 @@ def check_pr_merge(rest: list[str], cwd: str) -> str | None:
 def check_git(seg: list[str], cwd: str, flags: set[str]) -> str | None:
     git_cwd, sub, rest, configs = parse_git(seg[1:], cwd)
     opts = seg[1 : len(seg) - len(rest)]  # global options before the subcommand
+
     if (
         "hookspath" in flags
         or any("hookspath" in a.lower() for a in opts)
         or (sub == "config" and any("hookspath" in a.lower() for a in rest))
     ):
         return BYPASS_MSG
+
     sub, rest, shell = expand_alias(sub, rest, configs, git_cwd)
     if shell is not None:  # `!` alias: git runs it from the top of the work tree
         return check(shell, git_cwd, flags)
-    if sub in ("commit", "push", "merge") and ("skip" in flags or "--no-verify" in rest):
+
+    if sub in ("commit", "push", "merge") and (
+        "skip" in flags or any(is_no_verify(a) for a in rest)
+    ):
         return BYPASS_MSG
+    # `-n` is --no-verify only for commit; for push it is --dry-run.
     if sub == "commit" and any(re.fullmatch(r"-[a-zA-Z]*n[a-zA-Z]*", a) for a in rest):
         return BYPASS_MSG
+
     if sub == "switch":
         return SWITCH_MSG
     if sub == "checkout" and checkout_switches(rest, git_cwd):
         return SWITCH_MSG
+
     if creates_commit(sub, rest) and current_branch(git_cwd) == PROTECTED:
         return COMMIT_MSG
+
     if sub == "push":
         positional = [a for a in rest if not a.startswith("-")]
         refspecs = positional[1:]
@@ -461,6 +497,7 @@ def check_git(seg: list[str], cwd: str, flags: set[str]) -> str | None:
             return PUSH_MSG
         if not refspecs and current_branch(git_cwd) == PROTECTED:
             return PUSH_MSG
+
     return None
 
 
@@ -470,10 +507,12 @@ def check(command: str, cwd: str, inherited: set[str] | None = None) -> str | No
     `inherited` holds env_flags set by the caller (`SKIP=x bash -c '...'`).
     """
     inherited = inherited or set()
+
     try:
         segs, bodies = segments(command)
     except ValueError:  # unbalanced quotes
         return PARSE_MSG if GIT_WORD.search(command) else None
+
     stack: list[str] = []  # cwd outside each `( ... )`
     dirs: list[str] = []  # pushd stack
     piped: list[str] = []  # heredoc bodies of the previous command, if it pipes into this one
@@ -483,18 +522,27 @@ def check(command: str, cwd: str, inherited: set[str] | None = None) -> str | No
             piped = last
             continue
         stdin, piped = piped, []
+
         if raw == ["("]:
             stack.append(cwd)
             continue
         if raw == [")"]:
             cwd = stack.pop() if stack else cwd
             continue
+
         last = [bodies[int(w[len(HEREDOC) :])] for w in raw if w.startswith(HEREDOC)]
         stdin = last + stdin
         seg, flags, seg_cwd = unwrap([w for w in raw if not w.startswith(HEREDOC)], cwd)
         flags |= inherited
         if not seg:
+            if "hookspath" in flags:  # a bare `GIT_CONFIG_PARAMETERS=...` before `export`
+                return BYPASS_MSG
             continue
+
+        name = os.path.basename(seg[0])
+        if name in EXPORTERS and "hookspath" in exported_flags(seg[1:]):
+            return BYPASS_MSG
+
         script = shell_script(seg)
         if script is not None:
             reason = check(script, seg_cwd, flags)
@@ -507,6 +555,7 @@ def check(command: str, cwd: str, inherited: set[str] | None = None) -> str | No
                 if reason:
                     return reason
             continue
+
         if seg[0] == "cd":
             cwd = resolve(cwd, seg[1]) if len(seg) > 1 else os.path.expanduser("~")
             continue
@@ -519,19 +568,21 @@ def check(command: str, cwd: str, inherited: set[str] | None = None) -> str | No
         if seg[0] == "popd":
             cwd = dirs.pop() if dirs else cwd
             continue
-        if seg[0] == "gh" and seg[1:3] == ["pr", "merge"]:
+
+        if name == "gh" and seg[1:3] == ["pr", "merge"]:
             reason = check_pr_merge(seg[3:], seg_cwd)
             if reason:
                 return reason
             continue
-        if seg[0] == "gh" and len(seg) > 1 and seg[1] == "api":
+        if name == "gh" and len(seg) > 1 and seg[1] == "api":
             if any(re.search(r"/pulls/[^/\s]+/merge\b", a) for a in seg[2:]):
                 return MERGE_API_MSG
             continue
-        if seg[0] == "git":
+        if name == "git":
             reason = check_git(seg, seg_cwd, flags)
             if reason:
                 return reason
+
     return None
 
 
