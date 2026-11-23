@@ -26,3 +26,6 @@ jobs:
       # go test -race, and the hook and review-gate tests. The pre-push review
       # gate is not part of this stage.
       - run: pre-commit run --all-files --show-diff-on-failure
+      # Known vulnerabilities the code reaches, in the Go release go.mod names
+      # and in the modules it requires. Fails when one needs a newer Go.
+      - run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...

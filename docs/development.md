@@ -14,7 +14,7 @@ tool is used is in [[usage]].
 brew install go pre-commit      # or: pipx install pre-commit
 pre-commit install              # pre-commit and pre-push hooks
 go build -o bin/cc-login ./cmd/cc-login
-pre-commit run --all-files      # what CI runs
+pre-commit run --all-files      # what CI runs, plus govulncheck
 go test ./internal/ui -update   # rewrite the golden tables after a deliberate change
 ```
 
