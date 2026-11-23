@@ -8,7 +8,7 @@ claude gets only its own login's credentials.
 Install (macOS or Linux; the binary goes to `~/.local/bin`):
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Junyi-Agent/cc-login/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/Junyi-Agent/cc-login/main/install.sh | sh -s -- install binary
 ```
 
 Add a login (cc-login opens a sign-in link in the browser, then asks you to paste the code it shows):

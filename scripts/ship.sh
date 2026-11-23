@@ -10,7 +10,9 @@
 #   5. squash merge (GitHub deletes the remote branch);
 #   6. remove the worktree and the local branch, fast-forward main.
 #
-# Usage: scripts/ship.sh [--keep]    --keep leaves the worktree and branch.
+# Usage: scripts/ship.sh merge branch [--keep]
+#   merge branch   land this worktree's branch on main, as above
+#   --keep         leave the worktree and the branch
 set -euo pipefail
 
 say() { echo "ship: $*"; }
@@ -19,16 +21,27 @@ die() {
 	exit 1
 }
 
+usage() { sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; }
+
+case "${1:-} ${2:-}" in
+"merge branch") shift 2 ;;
+"-h "* | "--help "* | "help "*)
+	usage
+	exit 0
+	;;
+*)
+	usage >&2
+	exit 2
+	;;
+esac
+
 keep=0
 case "${1:-}" in
 "") ;;
 --keep) keep=1 ;;
--h | --help)
-	sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'
-	exit 0
-	;;
-*) die "unknown argument $1; usage: scripts/ship.sh [--keep]" ;;
+*) die "unknown option $1; usage: scripts/ship.sh merge branch [--keep]" ;;
 esac
+[ "$#" -le 1 ] || die "too many arguments; usage: scripts/ship.sh merge branch [--keep]"
 
 # 1. Check before anything leaves the machine.
 branch=$(git symbolic-ref --short HEAD 2>/dev/null) || die "not on a branch"

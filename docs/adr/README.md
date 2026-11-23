@@ -38,4 +38,4 @@
 | [0019](0019-doctor.md) | cc-login doctor 检查配置：链接、shell 变量、login 文件和过期 | 已验证 |
 | [0020](0020-import-token.md) | add --import-token 导入已有的 OAuth token | 采纳 |
 | [0021](0021-export-import.md) | export 和 import：用口令加密的文件把 login 搬到另一台机器 | 采纳 |
-| [0022](0022-keep-command-structure.md) | 保留 cc-login 现在的命令结构，豁免 kubectl 式结构 | 采纳 |
+| [0022](0022-keep-command-structure.md) | cc-login 保留命令结构（豁免 kubectl 式）；ship.sh 和 install.sh 改成 kubectl 式 | 采纳 |

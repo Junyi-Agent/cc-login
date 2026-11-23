@@ -8,7 +8,7 @@
   `git worktree add ../go-cc-login-<feature> -b <feature> origin/main`
 - 不在当前目录切换分支（`git checkout <branch>` / `git switch`）。
 - 不在 `main` 上提交，不 push 到 `main`。push feature 分支后开 PR，CI 通过后用 `gh pr merge --squash` 合并。
-- 合并用 `scripts/ship.sh` 一步做完：检查 → push（跑审查门禁）→ 开 PR → 等 CI → squash merge → 删 worktree 和分支、更新本地 `main`。见 [[docs/adr/0014-ship-script]]。
+- 合并用 `scripts/ship.sh merge branch` 一步做完：检查 → push（跑审查门禁）→ 开 PR → 等 CI → squash merge → 删 worktree 和分支、更新本地 `main`。见 [[docs/adr/0014-ship-script]]。
 - 不用 `--no-verify`、`SKIP=`、`core.hooksPath` 跳过 git hook。
 - 以上规则由 `.claude/hooks/git_guard.py`（PreToolUse hook）强制执行；`gh pr merge` 会先跑 `gh pr checks`，检查没全过就拒绝。见 [[docs/adr/0001-worktree-and-git-guard]]、[[docs/adr/0003-merge-requires-green-ci]]。
 - 推送前问用户；推送用 `gh` 的当前账户，先用 `gh auth status` 确认是 `Junyi-Agent`。
