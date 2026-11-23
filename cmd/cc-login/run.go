@@ -11,7 +11,10 @@ func (c *cli) runCmd() *cobra.Command {
 		Use:   "run [NAME] [-- ARGS...]",
 		Short: "Start claude with login NAME, or with the default login",
 		Long: `Start claude with login NAME: cc-login replaces itself with claude, whose
-environment holds that login's credentials and no other's. ARGS go to claude.
+environment holds that login's credentials and no other's. Keys, tokens and
+cloud providers set in the shell (ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN,
+CLAUDE_CODE_OAUTH_TOKEN, CLAUDE_CODE_USE_BEDROCK, _VERTEX, _FOUNDRY) do not
+reach it. ARGS go to claude.
 
 Without NAME: the login of the claude this runs in (a claude started by
 cc-login marks its children with CC_LOGIN_ID), else the default login. A link

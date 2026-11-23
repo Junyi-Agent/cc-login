@@ -125,10 +125,10 @@ func exportIDs(st *state.State, names []string) ([]string, Exported, error) {
 	}
 
 	var ids []string
-	for _, name := range names {
+	for i, name := range names {
 		id, l, err := st.ByName(name)
 		if err != nil {
-			return nil, res, err
+			return nil, res, fmt.Errorf("NAME %d of %d: %w", i+1, len(names), err) // the error does not show the name
 		}
 		if l.Kind == state.SignIn {
 			return nil, res, fmt.Errorf("login %s is a sign-in: its credentials stay on this machine; on the other one run cc-login add %s --sign-in", name, name)

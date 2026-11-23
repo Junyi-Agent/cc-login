@@ -127,12 +127,32 @@ func TestCheckName(t *testing.T) {
 		{"-x", false},
 		{"a/b", false},
 		{"a b", false},
+		{"sk-ant", true},
+		{"sk-antx", true},
+		{"my-sk-ant-x", true},
+		{"sk-ant-api03-pasted", false},
+		{"sk-ant-oat01-pasted", false},
+		{"SK-ANT-API03-PASTED", false},
+		{"Sk-Ant-x", false},
 	}
 
 	for _, tc := range cases {
-		if err := CheckName(tc.name); (err == nil) != tc.ok {
+		err := CheckName(tc.name)
+		if (err == nil) != tc.ok {
 			t.Errorf("CheckName(%q) = %v; want ok %v", tc.name, err, tc.ok)
 		}
+
+		if err != nil && tc.name != "" && strings.Contains(err.Error(), tc.name) {
+			t.Errorf("CheckName(%q) = %v; the error shows the name", tc.name, err)
+		}
+	}
+}
+
+// A name that looks like a key is refused as one.
+func TestCheckNameKey(t *testing.T) {
+	err := CheckName("sk-ant-api03-pasted")
+	if err == nil || !strings.Contains(err.Error(), "key or token") {
+		t.Errorf("CheckName(sk-ant-api03-pasted) = %v; want it to say it looks like a key", err)
 	}
 }
 
@@ -155,8 +175,9 @@ func TestByNameAndOrder(t *testing.T) {
 		t.Errorf("ByName(beta) = %q, %v, %v", id, l, err)
 	}
 
-	if _, _, err := st.ByName("nope"); !errors.Is(err, ErrNoLogin) {
-		t.Errorf("ByName(nope) = %v; want ErrNoLogin", err)
+	_, _, err = st.ByName("sk-ant-api03-pasted")
+	if !errors.Is(err, ErrNoLogin) || strings.Contains(err.Error(), "sk-ant") {
+		t.Errorf("ByName(sk-ant-api03-pasted) = %v; want ErrNoLogin, without the name", err)
 	}
 }
 

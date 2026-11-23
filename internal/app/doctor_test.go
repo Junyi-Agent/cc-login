@@ -66,6 +66,11 @@ func TestDoctorFindsProblems(t *testing.T) {
 		{"no link", func(_ *testing.T, _ *App, f *fake) { f.linked = false }, Fail, "without cc-login"},
 		{"no claude", func(_ *testing.T, _ *App, f *fake) { f.pathErr = claude.ErrNotFound }, Fail, "claude: claude is not installed"},
 		{"shell key", func(_ *testing.T, a *App, _ *fake) { a.Env = append(a.Env, "ANTHROPIC_API_KEY=sk-ant-x") }, Warn, "ANTHROPIC_API_KEY is set"},
+		{"shell token", func(_ *testing.T, a *App, _ *fake) { a.Env = append(a.Env, "CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat-x") }, Warn, "CLAUDE_CODE_OAUTH_TOKEN is set"},
+		{"shell auth token", func(_ *testing.T, a *App, _ *fake) { a.Env = append(a.Env, "ANTHROPIC_AUTH_TOKEN=x") }, Warn, "ANTHROPIC_AUTH_TOKEN is set"},
+		{"shell bedrock", func(_ *testing.T, a *App, _ *fake) { a.Env = append(a.Env, "CLAUDE_CODE_USE_BEDROCK=1") }, Warn, "CLAUDE_CODE_USE_BEDROCK is set"},
+		{"shell vertex", func(_ *testing.T, a *App, _ *fake) { a.Env = append(a.Env, "CLAUDE_CODE_USE_VERTEX=1") }, Warn, "CLAUDE_CODE_USE_VERTEX is set"},
+		{"shell foundry", func(_ *testing.T, a *App, _ *fake) { a.Env = append(a.Env, "CLAUDE_CODE_USE_FOUNDRY=1") }, Warn, "CLAUDE_CODE_USE_FOUNDRY is set"},
 		{"no default", func(t *testing.T, a *App, _ *fake) {
 			if err := a.Store.Update(func(st *state.State) error { st.Default = ""; return nil }); err != nil {
 				t.Fatal(err)

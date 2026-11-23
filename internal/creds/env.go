@@ -7,12 +7,19 @@ import (
 	"github.com/Junyi-Agent/cc-login/internal/state"
 )
 
-// credVars are the variables that carry a login's credentials, and the
-// marks cc-login leaves on the claude it starts (CC_LOGIN_ID,
-// CC_LOGIN_DEPTH). Env drops them all and sets the login's own, so one
-// login's key or token never reaches another login's claude.
+// credVars are the variables that carry a login's credentials, the ones
+// that would win over them, and the marks cc-login leaves on the claude it
+// starts (CC_LOGIN_ID, CC_LOGIN_DEPTH). Env and StoredEnv drop them all and
+// set the login's own, so one login's key or token never reaches another
+// login's claude, and the shell's never replaces the login's.
+//
+// claude takes, first to last: a cloud provider (CLAUDE_CODE_USE_BEDROCK,
+// _VERTEX, _FOUNDRY), ANTHROPIC_AUTH_TOKEN, ANTHROPIC_API_KEY, apiKeyHelper,
+// CLAUDE_CODE_OAUTH_TOKEN, then the stored sign-in.
 var credVars = []string{
 	"CLAUDE_SECURESTORAGE_CONFIG_DIR",
+	"CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY",
+	"ANTHROPIC_AUTH_TOKEN",
 	"ANTHROPIC_API_KEY",
 	"CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CODE_OAUTH_SCOPES",
 	"CC_LOGIN_ID", "CC_LOGIN_DEPTH",

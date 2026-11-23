@@ -102,7 +102,7 @@ func TestImportRefuses(t *testing.T) {
 		{"no passphrase", func(*testing.T) string { return good }, nil, "no input"},
 		{"no file", func(t *testing.T) string { return filepath.Join(t.TempDir(), "nope") }, []string{passphrase}, "no such file"},
 		{"a sign-in", sealedWith(`{"version":1,"logins":[{"name":"w","kind":"sign-in","secret":"sk-ant-x-12345"}]}`), []string{passphrase}, `kind "sign-in"`},
-		{"a bad name", sealedWith(`{"version":1,"logins":[{"name":"../x","kind":"api-key","secret":"sk-ant-api-12345"}]}`), []string{passphrase}, "cannot name a login"},
+		{"a bad name", sealedWith(`{"version":1,"logins":[{"name":"../x","kind":"api-key","secret":"sk-ant-api-12345"}]}`), []string{passphrase}, "invalid login name"},
 		{"a bad token", sealedWith(`{"version":1,"logins":[{"name":"t","kind":"token","secret":"sk-ant-api-12345"}]}`), []string{passphrase}, "no sk-ant-oat"},
 		{"another version", sealedWith(`{"version":2,"logins":[]}`), []string{passphrase}, "version 2"},
 	}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -28,7 +29,7 @@ func (c *cli) nameThenOpts(cmd *cobra.Command, args []string) error {
 
 	signIn, _ := cmd.Flags().GetBool("sign-in")
 	if cmd.Name() == "add" && len(args) > 1 && !signIn {
-		return fmt.Errorf("options for claude auth login need --sign-in: cc-login add %s --sign-in -- OPTS", args[0])
+		return errors.New("options for claude auth login need --sign-in: cc-login add NAME --sign-in -- OPTS")
 	}
 
 	return nil
