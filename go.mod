@@ -1,6 +1,6 @@
 module github.com/Junyi-Agent/cc-login
 
-go 1.26.5
+go 1.26.11
 
 require (
 	github.com/charmbracelet/bubbletea v1.3.6

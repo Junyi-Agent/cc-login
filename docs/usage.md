@@ -93,7 +93,7 @@ Check the link in a new shell:
 
 ```console
 $ cc-login version
-cc-login v1.2.3 (go1.26.5)
+cc-login v1.2.3 (go1.26.11)
 claude: /Users/me/.local/bin/claude
 claude link: /Users/me/.local/lib/cc-login/claude; a plain claude runs with the default login
 ```

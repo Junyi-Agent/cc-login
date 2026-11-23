@@ -27,7 +27,7 @@ brew install go pre-commit   # 或 pipx install pre-commit
 pre-commit install
 ```
 
-提交前会跑：YAML/JSON 校验、`golangci-lint fmt`（gofmt + goimports）、`golangci-lint run`（规则见 `.golangci.yml`）、`go mod tidy -diff`、`go test -race ./...`，改到对应文件时还跑 git guard 和审查门禁的单元测试。手动全量跑：`pre-commit run --all-files`。CI（`.github/workflows/ci.yml`）在 Ubuntu 和 macOS 上跑同一套配置。
+提交前会跑：YAML/JSON 校验、`golangci-lint fmt`（gofmt + goimports）、`golangci-lint run`（规则见 `.golangci.yml`）、`go mod tidy -diff`、`go test -race ./...`，改到对应文件时还跑 git guard 和审查门禁的单元测试。手动全量跑：`pre-commit run --all-files`。CI（`.github/workflows/ci.yml`）在 Ubuntu 和 macOS 上跑同一套配置，另外跑 `govulncheck`：代码用到的 Go 标准库或依赖有已知漏洞时失败，按它说的升级 `go.mod` 里的 Go 版本或依赖。
 
 ## 设计规则
 
