@@ -1,6 +1,7 @@
 # A wrong command line: the reason, and where the help is.
 ! exec cc-login nope
-stderr 'unknown command "nope"'
+stderr '^cc-login: unknown command$'
+! stderr 'nope'
 stderr 'Run ''cc-login --help'' for usage.'
 
 ! exec cc-login lsit
@@ -33,6 +34,23 @@ stderr 'no logins yet; add one with: cc-login add NAME'
 # of the terminal.
 ! exec cc-login add work sk-ant-oat01-pasted
 ! stderr 'sk-ant'
+! exec cc-login sk-ant-api03-pasted
+stderr 'unknown command'
+! stderr 'sk-ant'
+! exec cc-login add sk-ant-api03-pasted -- --email me@example.com
+stderr 'need --sign-in: cc-login add NAME --sign-in -- OPTS'
+! stderr 'sk-ant'
+! exec cc-login use sk-ant-api03-pasted
+stderr 'no such login; cc-login list shows the logins'
+! stderr 'sk-ant'
+! exec cc-login add 'sk-ant/pasted'
+stderr 'invalid login name: use letters'
+! stderr 'sk-ant'
+
+# A name that looks like a key is no name: add and rename refuse it.
+! exec cc-login add sk-ant-api03-pasted --api-key
+stderr 'invalid login name: it starts like a key or token \(sk-ant-\); choose another name'
+! stderr 'api03'
 
 
 exec cc-login --help
@@ -54,6 +72,17 @@ stdout '^cc-login '
 
 mkdir root/.dirs/a1
 cp state.json root/state.json
+
+# An existing login as a command says how to make a login the default.
+! exec cc-login work
+stderr '^cc-login: unknown command; to make a login the default, run: cc-login use NAME$'
+! exec cc-login rename work SK-ANT-api03-pasted
+stderr 'starts like a key or token'
+! stderr 'api03'
+! exec cc-login rename nope other
+stderr 'no such login'
+! stderr 'nope'
+
 exec cc-login list --verbose
 stderr 'level=DEBUG msg=list .*logins=1'
 stderr 'msg=probe login=work .*status=signed-out'

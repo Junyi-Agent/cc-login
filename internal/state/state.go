@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -51,7 +52,7 @@ type State struct {
 const Version = 1
 
 // ErrNoLogin means no login has that name.
-var ErrNoLogin = errors.New("no such login")
+var ErrNoLogin = errors.New("no such login; cc-login list shows the logins")
 
 // Store is the data root.
 type Store struct {
@@ -183,22 +184,32 @@ func WriteAtomic(path string, data []byte) error {
 // nameRE is the form of a login name.
 var nameRE = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9._-]*$`)
 
-// CheckName reports whether name can name a login.
+// keyPrefix starts Anthropic keys and tokens; no login name starts with it,
+// in any case, so that a key pasted as a name is not saved and shown.
+const keyPrefix = "sk-ant-"
+
+// CheckName reports whether name can name a login. The error never shows
+// name: it may be a key pasted in the wrong place (ADR 0006).
 func CheckName(name string) error {
 	if !nameRE.MatchString(name) {
-		return fmt.Errorf("%q cannot name a login: use letters, digits, _ . and -, not first . or -", name)
+		return errors.New("invalid login name: use letters, digits, _ . and -, not first . or -")
+	}
+
+	if strings.HasPrefix(strings.ToLower(name), keyPrefix) {
+		return errors.New("invalid login name: it starts like a key or token (" + keyPrefix + "); choose another name")
 	}
 	return nil
 }
 
-// ByName finds the login named name and its ID.
+// ByName finds the login named name and its ID. The error never shows
+// name, as CheckName's.
 func (st *State) ByName(name string) (string, *Login, error) {
 	for id, l := range st.Logins {
 		if l.Name == name {
 			return id, l, nil
 		}
 	}
-	return "", nil, fmt.Errorf("%w %q", ErrNoLogin, name)
+	return "", nil, ErrNoLogin
 }
 
 // IDs are the IDs of the logins, sorted by name.

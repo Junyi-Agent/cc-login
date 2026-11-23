@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -64,7 +65,8 @@ shows the logins.
 
 // noCommand rejects arguments to cc-login itself: the first one is not a
 // command. The error suggests a command it looks like, or, when it names a
-// login, how to make that login the default.
+// login, how to make a login the default. It never shows the argument: a
+// key pasted in the wrong place stays out of the terminal (ADR 0006).
 func (c *cli) noCommand(cmd *cobra.Command, args []string) error {
 	if len(args) == 0 {
 		return nil
@@ -72,12 +74,12 @@ func (c *cli) noCommand(cmd *cobra.Command, args []string) error {
 	arg := args[0]
 
 	if s := cmd.SuggestionsFor(arg); len(s) > 0 {
-		return fmt.Errorf("unknown command %q; did you mean %s?", arg, strings.Join(s, " or "))
+		return fmt.Errorf("unknown command; did you mean %s?", strings.Join(s, " or "))
 	}
 
 	if slices.Contains(c.app.Names(), arg) {
-		return fmt.Errorf("unknown command %q; to make login %s the default, run: cc-login use %s", arg, arg, arg)
+		return errors.New("unknown command; to make a login the default, run: cc-login use NAME")
 	}
 
-	return fmt.Errorf("unknown command %q", arg)
+	return errors.New("unknown command") // execute adds where the help is
 }
