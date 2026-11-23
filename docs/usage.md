@@ -20,7 +20,7 @@ The short version is in [[README]]. `cc-login --help` and
 | `completion` | zsh, bash, fish and powershell completion: commands, options, login names |
 | `add NAME` | a new login: an OAuth token (the default, `--oauth-token`; see below), an API key (`--api-key`, checked with the API), a token you already have (`--import-token`, [ADR 0020](adr/0020-import-token.md); without `user:profile` it has no account, plan or quota, and its expiry is unknown), or a sign-in (`--sign-in [-- OPTS]`, through `claude auth login`); the key, token or code is shown as `*` while typed; without a terminal it is a line of stdin |
 | `renew NAME [-- OPTS]` | signs a login in again so it expires later; a new OAuth token for a token login |
-| `doctor` | checks the setup, offline: claude, the `claude` link, keys and tokens set in the shell, `state.json`, each login's files and expiry; prints what to do for each problem; exit 1 when something does not work ([ADR 0019](adr/0019-doctor.md)) |
+| `doctor` | checks the setup, offline: claude, the `claude` link, keys, tokens and cloud providers set in the shell (the variables cc-login drops, see [The claude link](#the-claude-link)), `state.json`, each login's files and expiry; prints what to do for each problem; exit 1 when something does not work ([ADR 0019](adr/0019-doctor.md)) |
 | `export FILE [NAME...]` | writes token and API key logins (all, or those named) into a new file, encrypted with a passphrase typed twice; sign-in logins stay on this machine ([ADR 0021](adr/0021-export-import.md)) |
 | `import FILE` | adds the logins of an export file after asking its passphrase; a name this machine has is skipped; nothing is checked online |
 | `adopt NAME` | moves `~/.claude/.credentials.json`, written by a claude run without cc-login, into a new login (`list` says when there is one) |
@@ -99,6 +99,15 @@ claude link: /Users/me/.local/lib/cc-login/claude; a plain claude runs with the 
 ```
 
 `cc-login run [NAME] -- ARGS` starts claude with a login without the link.
+
+Claude Code takes the first of: a cloud provider (`CLAUDE_CODE_USE_BEDROCK`,
+`CLAUDE_CODE_USE_VERTEX`, `CLAUDE_CODE_USE_FOUNDRY`), `ANTHROPIC_AUTH_TOKEN`,
+`ANTHROPIC_API_KEY`, the `apiKeyHelper` setting, `CLAUDE_CODE_OAUTH_TOKEN`,
+the stored sign-in. So that the login is the one used, cc-login drops these
+variables, and `CLAUDE_CODE_OAUTH_SCOPES`, from the environment of the claude
+it starts, then sets the login's own. A claude through cc-login never uses
+Bedrock, Vertex or Foundry; `doctor` warns when the shell sets one of the
+variables above.
 
 A claude started by cc-login marks its environment with `CC_LOGIN_ID`, so a
 claude it starts in turn (`claude -p`, hooks, scripts) stays on the same login

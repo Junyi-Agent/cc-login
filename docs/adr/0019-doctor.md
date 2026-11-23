@@ -10,7 +10,7 @@
 
 - 新命令 `cc-login doctor`，只做离线检查，不联网，不调 `claude auth status`：
   - claude 能找到；`claude` 链接装了，并且在 PATH 里排第一。
-  - shell 里设了 `ANTHROPIC_API_KEY` 或 `CLAUDE_CODE_OAUTH_TOKEN`（cc-login 的 claude 不带它们，没有链接的 claude 会用）。
+  - shell 里设了 `ANTHROPIC_API_KEY`、`CLAUDE_CODE_OAUTH_TOKEN`、`ANTHROPIC_AUTH_TOKEN`、`CLAUDE_CODE_USE_BEDROCK`、`CLAUDE_CODE_USE_VERTEX` 或 `CLAUDE_CODE_USE_FOUNDRY`（cc-login 的 claude 不带它们，没有链接的 claude 会用）。
   - state.json 能读；有默认 login。
   - 每个 login：凭据目录在、权限不让别人读（目录 0700，key 或 token 文件 0600）；key 或 token 文件在；token 没过期、一周内不过期；token 有 `user:profile`。
   - `~/.claude/.credentials.json` 里有没被 cc-login 管的 sign-in（提示 `adopt`）。

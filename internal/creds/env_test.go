@@ -9,13 +9,18 @@ import (
 	"github.com/Junyi-Agent/cc-login/internal/state"
 )
 
-// base is an environment that carries another login's credentials.
+// base is an environment that carries another login's credentials, and
+// the shell's own, which claude would take over a login's.
 var base = []string{
 	"HOME=/home/me",
 	"CLAUDE_SECURESTORAGE_CONFIG_DIR=/other",
 	"ANTHROPIC_API_KEY=sk-ant-other",
 	"CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat-other",
 	"CLAUDE_CODE_OAUTH_SCOPES=user:inference",
+	"ANTHROPIC_AUTH_TOKEN=bearer-other",
+	"CLAUDE_CODE_USE_BEDROCK=1",
+	"CLAUDE_CODE_USE_VERTEX=1",
+	"CLAUDE_CODE_USE_FOUNDRY=1",
 }
 
 func TestEnv(t *testing.T) {
@@ -50,6 +55,16 @@ func TestEnv(t *testing.T) {
 
 	if base[1] != "CLAUDE_SECURESTORAGE_CONFIG_DIR=/other" {
 		t.Error("Env changed its base")
+	}
+}
+
+// StoredEnv keeps only the directory: no key, token or cloud provider of
+// the shell or of another login.
+func TestStoredEnv(t *testing.T) {
+	want := []string{"HOME=/home/me", "CLAUDE_SECURESTORAGE_CONFIG_DIR=/mine"}
+
+	if got := StoredEnv(base, "/mine"); !slices.Equal(got, want) {
+		t.Errorf("StoredEnv = %q; want %q", got, want)
 	}
 }
 

@@ -78,11 +78,16 @@ func (a *App) checkClaude() []Finding {
 	return fs
 }
 
-// shellVars are the variables that make a claude without the link use a key
-// or token of the shell; cc-login drops them from the claude it starts.
-var shellVars = []string{"ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN"}
+// shellVars are the variables that make a claude without the link use a
+// key, token or cloud provider of the shell; cc-login drops them from the
+// claude it starts (creds.Env).
+var shellVars = []string{
+	"CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY",
+	"ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN",
+}
 
-// checkShell checks the shell's environment for keys and tokens of its own.
+// checkShell checks the shell's environment for keys, tokens and cloud
+// providers of its own.
 func (a *App) checkShell() []Finding {
 	var fs []Finding
 
