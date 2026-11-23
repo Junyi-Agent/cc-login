@@ -1,6 +1,6 @@
 # cc-login (Go)
 
-一台机器上管理多个 Claude Code 登录，claude 由 cc-login 用 exec 启动。最初是 `cc-login.zsh` 的 Go 移植，现在独立设计，不再与 zsh 版兼容（2026-11-21 用户决定）。上手见 [[README]]，用法见 [[docs/usage]]，开发和进度见 [[docs/development]]，设计见 `docs/adr/`（0006–0021）。
+一台机器上管理多个 Claude Code 登录，claude 由 cc-login 用 exec 启动。最初是 `cc-login.zsh` 的 Go 移植，现在独立设计，不再与 zsh 版兼容（2026-11-21 用户决定）。上手见 [[README]]，用法见 [[docs/usage]]，开发和进度见 [[docs/development]]，设计见 `docs/adr/`（0006–0022）。
 
 ## 开发流程
 
@@ -8,7 +8,7 @@
   `git worktree add ../go-cc-login-<feature> -b <feature> origin/main`
 - 不在当前目录切换分支（`git checkout <branch>` / `git switch`）。
 - 不在 `main` 上提交，不 push 到 `main`。push feature 分支后开 PR，CI 通过后用 `gh pr merge --squash` 合并。
-- 合并用 `scripts/ship.sh` 一步做完：检查 → push（跑审查门禁）→ 开 PR → 等 CI → squash merge → 删 worktree 和分支、更新本地 `main`。见 [[docs/adr/0014-ship-script]]。
+- 合并用 `scripts/ship.sh merge branch` 一步做完：检查 → push（跑审查门禁）→ 开 PR → 等 CI → squash merge → 删 worktree 和分支、更新本地 `main`。见 [[docs/adr/0014-ship-script]]。
 - 不用 `--no-verify`、`SKIP=`、`core.hooksPath` 跳过 git hook。
 - 以上规则由 `.claude/hooks/git_guard.py`（PreToolUse hook）强制执行；`gh pr merge` 会先跑 `gh pr checks`，检查没全过就拒绝。见 [[docs/adr/0001-worktree-and-git-guard]]、[[docs/adr/0003-merge-requires-green-ci]]。
 - 推送前问用户；推送用 `gh` 的当前账户，先用 `gh auth status` 确认是 `Junyi-Agent`。

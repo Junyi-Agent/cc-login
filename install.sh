@@ -2,17 +2,35 @@
 # install.sh: download the latest cc-login release for this machine, check
 # it against the release's checksums, and install it (ADR 0016).
 #
-#   curl -fsSL https://raw.githubusercontent.com/Junyi-Agent/cc-login/main/install.sh | sh
-#   curl -fsSL .../install.sh | sh -s -- DIR    # into DIR instead of ~/.local/bin
+# Usage: install.sh install binary [DIR]    DIR instead of ~/.local/bin
+#
+#   curl -fsSL https://raw.githubusercontent.com/Junyi-Agent/cc-login/main/install.sh | sh -s -- install binary
 set -eu
 
 repo=Junyi-Agent/cc-login
-dir=${1:-$HOME/.local/bin}
 
 die() {
 	echo "install.sh: $*" >&2
 	exit 1
 }
+
+usage() {
+	echo "usage: install.sh install binary [DIR]    (curl -fsSL .../install.sh | sh -s -- install binary [DIR])"
+}
+
+case "${1:-} ${2:-}" in
+"install binary") shift 2 ;;
+"-h "* | "--help "* | "help "*)
+	usage
+	exit 0
+	;;
+*)
+	usage >&2
+	exit 2
+	;;
+esac
+[ "$#" -le 1 ] || die "too many arguments; $(usage)"
+dir=${1:-$HOME/.local/bin}
 
 # The archive for this OS and CPU, as goreleaser names it.
 os=$(uname -s | tr '[:upper:]' '[:lower:]')

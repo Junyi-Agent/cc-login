@@ -69,7 +69,8 @@ becomes it.
 `install.sh` (in [[README]]) downloads the latest release for this machine
 from [GitHub releases](https://github.com/Junyi-Agent/cc-login/releases),
 checks it against the release's `checksums.txt`, and installs it in
-`~/.local/bin`; `sh -s -- DIR` installs it in DIR. Run it again to update.
+`~/.local/bin`: `sh -s -- install binary`, or `sh -s -- install binary DIR`
+for DIR. Run it again to update.
 With Go, `go install github.com/Junyi-Agent/cc-login/cmd/cc-login@latest`
 builds it instead.
 

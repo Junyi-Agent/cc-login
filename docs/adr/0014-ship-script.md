@@ -10,7 +10,7 @@
 
 ## 决策
 
-- `scripts/ship.sh` 在 feature worktree 里运行，依次：
+- `scripts/ship.sh merge branch` 在 feature worktree 里运行（调用形式见 [[0022-keep-command-structure]]），依次：
   1. 检查：在 feature 分支上、没有未提交的改动、包含 `origin/main`（分支保护要求同步）、`gh` 当前账户是仓库所有者、`claude` 已登录（审查门禁要用）；任何一项不满足就在推送前退出。
   2. `git push -u origin <branch>`，pre-push 审查门禁照常跑。
   3. 复用这个分支已开的 PR，没有就新开：标题取最后一个提交的标题，正文列出各个提交。
