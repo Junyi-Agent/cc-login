@@ -9,8 +9,8 @@ agent 在主目录直接切分支或在 `main` 上提交，会打乱用户正在
 ## 决策
 
 - 每个新功能在仓库目录之外建 worktree：`git worktree add ../go-cc-login-<feature> -b <feature> origin/main`。
-- `.claude/hooks/git_guard.py`（PreToolUse，Bash，取自 `Junyi-Agent/skills`）拒绝：在当前目录 `git switch` / `git checkout <branch>`、在 `main` 上产生提交（commit、merge、cherry-pick、revert、am）、push 到 `main`、用 `--no-verify` / `SKIP=` / `core.hooksPath` 跳过 git hook、CI 没全过时 `gh pr merge`。
-- 分支按命令实际运行的目录判断，跟随 `cd`、`pushd`、子 shell、`env -C`、`git -C`，透过 `env`、`bash -c` 等包装和 git 别名解析。hook 出错或解析不了提到 git/gh 的命令时拒绝（fail closed）。
+- `.claude/hooks/git_guard.py`（PreToolUse，Bash，取自 `Junyi-Agent/skills`）拒绝：在当前目录 `git switch` / `git checkout <branch>`、在 `main` 上产生提交（commit、merge、cherry-pick、revert、am）、push 到 `main`、用 `--no-verify`（含 `--no-veri` 这类 git 接受的缩写）/ `SKIP=` / `core.hooksPath`（含命令前或 `export` 设置的 `GIT_CONFIG_*`）跳过 git hook、CI 没全过时 `gh pr merge`。
+- 分支按命令实际运行的目录判断，跟随 `cd`、`pushd`、子 shell、`env -C`、`git -C`，透过 `env`、`bash -c` 等包装和 git 别名解析。命令按文件名识别，`/usr/bin/git`、`/opt/homebrew/bin/gh` 和 `git`、`gh` 一样处理。hook 出错或解析不了提到 git/gh 的命令时拒绝（fail closed）。
 - 远端还没有 `main` 时，第一次提交和推送由人类在终端完成。
 
 ## 后果

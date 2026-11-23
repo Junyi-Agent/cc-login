@@ -287,6 +287,79 @@ class GitGuardTest(unittest.TestCase):
         self.assertFalse(self.denied("git commit -am x", self.feat))
         self.assertFalse(self.denied("git grep hooksPath", self.feat))
 
+    def test_no_verify_abbreviations(self):
+        deny = [
+            "git commit --no-veri -m x",
+            "git commit --no-verif -m x",
+            "git push --no-veri origin feature",
+            "git merge --no-verif other",
+            "git commit -n -m x",
+            "git -c alias.ci='commit --no-veri' ci -m x",
+        ]
+        allow = [
+            "git commit --no-ver -m x",  # git rejects it: ambiguous with --no-verbose
+            "git commit --no-verbose -m x",
+            "git merge --no-verify-signatures other",
+            "git push -n origin feature",  # -n is --dry-run for push
+            "git commit -m --no-verify-later",
+        ]
+
+        for cmd in deny:
+            self.assertTrue(self.denied(cmd, self.feat), cmd)
+        for cmd in allow:
+            self.assertFalse(self.denied(cmd, self.feat), cmd)
+
+    def test_export_hookspath(self):
+        deny = [
+            "export GIT_CONFIG_PARAMETERS=\"'core.hooksPath=/dev/null'\"; git push",
+            "export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.HOOKSPATH GIT_CONFIG_VALUE_0=/x",
+            "export GIT_CONFIG_KEY_0=core.hooksPath && git commit -m x",
+            "declare -x GIT_CONFIG_PARAMETERS=\"'core.hookspath=/x'\"; git push",
+            "GIT_CONFIG_PARAMETERS=\"'core.hooksPath=/x'\"; export GIT_CONFIG_PARAMETERS",
+            "bash -c \"export GIT_CONFIG_KEY_0=core.hooksPath; git push\"",
+        ]
+        allow = [
+            "export GIT_CONFIG_PARAMETERS=\"'user.name=x'\"; git push",
+            "export FOO=hooksPath; git push",
+            # `export SKIP=...` then a separate git command: accepted limitation (ADR 0001)
+            "export SKIP=review-gate; git push origin feature",
+        ]
+
+        for cmd in deny:
+            self.assertTrue(self.denied(cmd, self.feat), cmd)
+        for cmd in allow:
+            self.assertFalse(self.denied(cmd, self.feat), cmd)
+
+    def test_commands_by_path(self):
+        deny_on_feat = [
+            "/usr/bin/git push --no-verify",
+            "/usr/bin/git switch other",
+            "./git checkout other",
+            "/usr/bin/git push origin main",
+            "SKIP=review-gate /opt/homebrew/bin/git push",
+            "/usr/bin/env git push origin main",
+            "/usr/bin/nohup /usr/bin/git push origin main",
+            "/usr/bin/git -c core.hooksPath=/dev/null push",
+            "/bin/bash -c '/usr/bin/git push origin main'",
+            "/opt/homebrew/bin/gh api -X PUT repos/o/r/pulls/3/merge",
+        ]
+
+        for cmd in deny_on_feat:
+            self.assertTrue(self.denied(cmd, self.feat), cmd)
+        self.assertTrue(self.denied("/usr/bin/git commit -m x", self.main))
+        self.assertFalse(self.denied("/usr/bin/git commit -m x", self.feat))
+        self.assertFalse(self.denied("/usr/bin/git status", self.main))
+
+    def test_gh_pr_merge_by_path(self):
+        orig = git_guard.pr_checks
+        try:
+            git_guard.pr_checks = lambda args, cwd: (1, "failed")
+            self.assertTrue(self.denied("/opt/homebrew/bin/gh pr merge 1", self.main))
+            git_guard.pr_checks = lambda args, cwd: (0, "ok")
+            self.assertFalse(self.denied("/opt/homebrew/bin/gh pr merge 1", self.main))
+        finally:
+            git_guard.pr_checks = orig
+
     def test_pr_merge_requires_green_checks(self):
         calls = []
 
