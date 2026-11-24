@@ -57,3 +57,6 @@ pre-commit install
 - `CC_LOGIN_API_URL`、`CC_LOGIN_OAUTH_URL` 是给测试用的设置：testscript 把它们指向本地不存在的地址，保证测试不连网。
 - `internal/oauth` 用 Claude Code 的 OAuth client_id 和没公开的地址（[[docs/adr/0017-own-oauth]]）；`cmd/cc-login/prompt.go` 用 `open`/`xdg-open` 打开 cc-login 自己拼的登录链接（G204 用 nolint 注明）。
 - `git_guard.py` 和 `review_gate.py` 来自 `Junyi-Agent/skills`，`review_gate.py` 改了审查方向，并在远端为空时审查全部内容。
+- 不考虑并发（2026-11-23 用户决定）：cc-login 按一次只有一个人在一台机器上用来设计。同时跑两个改 state.json 的命令可能互相覆盖，比如并发 `add` 写出两个同名 login、`renew` 结束时撤销期间的 rename，这些不当问题上报。
+- `export SKIP=...` 之后单独 `git push` 拦不住：git guard 只看命令前面的 `VAR=x`，见 [[docs/adr/0001-worktree-and-git-guard]]，靠本文件的规则约束。
+- cc-login 的子命令不是 kubectl 式结构、`list` 用 `--json` 不用 `-o`：[[docs/adr/0022-keep-command-structure]] 豁免了。
